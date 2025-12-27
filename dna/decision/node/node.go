@@ -1,11 +1,13 @@
 package node
 
-import "dna/state"
+import (
+	"dna/decision/state"
+)
 
 const (
 	Root state.Flag = iota
 	Idle
-	Work
+	Task
 	Sleep
 	Watch
 	Explore
@@ -24,10 +26,10 @@ const (
 func RootNodeAsTree() state.State {
 	node := state.NewVirtualState(Root)
 
-	node.AddChild(IdleNode())
-	// node.AddChild(WorkNode())
+	node.AddChild(TaskNode())
 	node.AddChild(SleepNode())
-
+	// 默认进入最后一个状态
+	node.AddChild(IdleNode())
 	return node
 }
 
@@ -51,6 +53,46 @@ func MemoryNode() state.State {
 	return state.NewReturnState(Memory, nil)
 }
 
-func WatchEnvironmentNode(action func(ctx *state.Context) (any, error)) state.State {
-	return state.NewWorkState(WatchEnvironment, action)
+func NewNodeByFlag(flag uint) state.State {
+	name, exists := state.NameMap[flag]
+	if !exists {
+		return nil
+	}
+
+	switch name {
+	case "Root":
+		return RootNodeAsTree()
+	case "Idle":
+		return IdleNode()
+	case "Task":
+		return TaskNode()
+	case "Sleep":
+		return SleepNode()
+	case "Watch":
+		return WatchNode()
+	case "Explore":
+		return ExploreNode()
+	case "Introspection":
+		return IntrospectionNode()
+	case "Answer":
+		return AnswerNode()
+	case "Memory":
+		return MemoryNode()
+	case "Ask":
+		return AskNode()
+	case "WatchEnvironment":
+		return WatchEnvironmentNode()
+	case "WatchRoom":
+		return WatchRoomNode()
+	case "ExploreConcept":
+		return ExploreConceptNode()
+	case "ExploreBehavior":
+		return ExploreBehaviorNode()
+	case "ExploreCharacter":
+		return ExploreCharacterNode()
+	// case "OrganizeMetacognition":
+	// 	return OrganizeMetacognitionNode()
+	default:
+		return nil
+	}
 }

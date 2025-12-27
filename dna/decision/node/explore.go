@@ -1,7 +1,7 @@
 package node
 
 import (
-	"dna/state"
+	state "dna/decision/state"
 	"math/rand"
 	"strings"
 )
@@ -10,6 +10,7 @@ type ExploreResult struct {
 	Question string
 	Answer   string
 	NeedAsk  bool
+	state.ResultData
 }
 
 type ExploreSave struct {
@@ -25,51 +26,35 @@ func ExploreNode() state.State {
 	node.AddChild(ExploreConceptNode())
 	node.AddChild(ExploreBehaviorNode())
 	node.AddChild(ExploreCharacterNode())
+	node.AddCondition(func(ctx *state.Context) bool {
+		return true
+	})
 	return node
 }
 
 func ExploreConceptNode() state.State {
-	node := state.NewConditionalWorkState(
+	node := state.NewWorkState(
 		ExploreConcept,
 		ExploreAction,
-		func(data any) bool {
-			if d, ok := data.(ExploreResult); ok {
-				return d.NeedAsk
-			}
-			return false
-		},
 	)
-	node.AddChild(AskNode())
+	// 由于保底决策的存在，不把回归节点加入状态树，后续再看两者哪个更好
+	//node.AddChild(AskNode())
 	return node
 }
 
 func ExploreBehaviorNode() state.State {
-	node := state.NewConditionalWorkState(
+	node := state.NewWorkState(
 		ExploreBehavior,
 		ExploreAction,
-		func(data any) bool {
-			if d, ok := data.(ExploreResult); ok {
-				return d.NeedAsk
-			}
-			return false
-		},
 	)
-	node.AddChild(AskNode())
 	return node
 }
 
 func ExploreCharacterNode() state.State {
-	node := state.NewConditionalWorkState(
+	node := state.NewWorkState(
 		ExploreCharacter,
 		ExploreAction,
-		func(data any) bool {
-			if d, ok := data.(ExploreResult); ok {
-				return d.NeedAsk
-			}
-			return false
-		},
 	)
-	node.AddChild(AskNode())
 	return node
 }
 
@@ -96,7 +81,7 @@ func createConceptQuestion(t uint) string {
 	return question
 }
 
-func ExploreAction(ctx *state.Context) (any, error) {
+func ExploreAction(ctx *state.Context) (state.Result, error) {
 	// 读取Ask节点的结果
 	if v, exists := ctx.Data[Ask]; exists {
 		if ad, ok := v.(AskData); ok && ad.Answer != "" {
@@ -145,10 +130,17 @@ func ExploreAction(ctx *state.Context) (any, error) {
 				if exploreCheckpoint(ctx, initSave) {
 					break
 				}
+				continue
 			}
 			// 将data交给Ask节点
 			ctx.Data[Ask] = AskData{Question: initSave.Question}
 			return ExploreResult{
+				ResultData: state.ResultData{
+					Status:    state.ToReturn,
+					From:      ctx.Caller,
+					NextState: AskNode(),
+					Data:      AskData{Question: initSave.Question},
+				},
 				Question: initSave.Question,
 				NeedAsk:  true,
 			}, nil
@@ -169,7 +161,11 @@ func ExploreAction(ctx *state.Context) (any, error) {
 	return ExploreResult{
 		Question: initSave.Question,
 		NeedAsk:  false,
-	}, state.ErrInterrupted
+		ResultData: state.ResultData{
+			Status: state.Interrupted,
+			From:   ctx.Caller,
+		},
+	}, nil
 }
 
 func exploreCheckpoint(ctx *state.Context, save ExploreSave) bool {

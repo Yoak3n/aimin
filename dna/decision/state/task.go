@@ -4,6 +4,7 @@ import (
 	"time"
 )
 
+// Task 任务怎么从外部插入，从内部添加，是个问题
 type Task struct {
 	ID        string
 	Type      uint

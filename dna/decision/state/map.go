@@ -3,7 +3,7 @@ package state
 var NameMap = map[uint]string{
 	0:  "Root",
 	1:  "Idle",
-	2:  "Work",
+	2:  "Task",
 	3:  "Sleep",
 	4:  "Watch",
 	5:  "Explore",

@@ -1,7 +1,7 @@
 package node
 
 import (
-	"dna/state"
+	"dna/decision/state"
 	"errors"
 )
 

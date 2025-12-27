@@ -1,8 +1,8 @@
 package logger
 
 import (
+	"blood/pkg/util"
 	"bytes"
-	"dna/pkg/util"
 	"fmt"
 	"os"
 	"path"

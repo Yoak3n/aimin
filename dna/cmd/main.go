@@ -1,8 +1,8 @@
 package main
 
 import (
+	"blood/pkg/logger"
 	"dna/decision"
-	"dna/pkg/logger"
 )
 
 func init() {
