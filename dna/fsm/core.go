@@ -18,7 +18,7 @@ type State interface {
 	ID() string
 	Name() string
 	Type() StateType
-
+	Children() []State
 	// CheckEntryCondition 检查是否满足进入条件
 	CheckEntryCondition(ctx *Context) bool
 
@@ -40,20 +40,22 @@ type State interface {
 
 // Context 运行上下文，用于传递数据
 type Context struct {
-	Data map[string]interface{}
+	Data    map[string]interface{}
+	Current string
 }
 
 func NewContext() *Context {
 	return &Context{
-		Data: make(map[string]interface{}),
+		Data:    make(map[string]interface{}),
+		Current: "",
 	}
 }
 
 // FSM 有限状态机核心
 type FSM struct {
-	states       map[string]State
-	currentState State
-
+	states         map[string]State
+	currentState   State
+	initialStateID string
 	// 任务队列 (高优先级)
 	taskQueue []State
 
@@ -75,8 +77,21 @@ func NewFSM() *FSM {
 }
 
 // RegisterState 注册状态
+// RegisterState 是FSM结构体的一个方法，用于注册一个新的状态
+// 参数:
+//   - s: 要注册的状态，实现了State接口
+//
+// 功能:
+//
+//	将传入的状态s以其ID为键存储到f.states映射中，使FSM能够识别和管理该状态
 func (f *FSM) RegisterState(s State) {
-	f.states[s.ID()] = s
+	f.states[s.ID()] = s // 将状态s存储到states映射中，键为状态的ID
+	children := s.Children()
+	if children != nil {
+		for _, child := range children {
+			f.RegisterState(child)
+		}
+	}
 }
 
 // AddTask 添加高优先级任务
@@ -94,7 +109,7 @@ func (f *FSM) Start(initialStateID string) {
 	if !ok {
 		panic(fmt.Sprintf("Initial state %s not found", initialStateID))
 	}
-
+	f.initialStateID = initialStateID
 	if !startState.CheckEntryCondition(f.ctx) {
 		panic(fmt.Sprintf("Initial state %s entry condition failed", initialStateID))
 	}
@@ -139,7 +154,7 @@ func (f *FSM) Update() {
 	nextStateID := f.currentState.OnUpdate(f.ctx)
 
 	// 3. 处理状态转换
-	if nextStateID == "__DONE__" {
+	if nextStateID == Done {
 		f.handleStateDone()
 	} else if nextStateID != "" && nextStateID != f.currentState.ID() {
 		f.changeState(nextStateID)
@@ -194,27 +209,52 @@ func (f *FSM) handleStateDone() {
 		return
 	}
 
-	// 3. 既没有任务也没有要恢复的状态，进入空闲或停止
-	fmt.Println("[FSM] No more states. Idle.")
-	f.currentState = nil
-	f.isRunning = false
+	// 3. 既没有任务也没有要恢复的状态，进入Root
+	f.returnToInitial()
 }
 
 // changeState 普通状态切换
 func (f *FSM) changeState(nextStateID string) {
+	f.ctx.Current = nextStateID
 	nextState, ok := f.states[nextStateID]
 	if !ok {
 		fmt.Printf("[FSM] Error: State %s not found\n", nextStateID)
 		return
 	}
 
-	if !nextState.CheckEntryCondition(f.ctx) {
-		fmt.Printf("[FSM] Condition failed for %s. Staying in %s\n", nextState.Name(), f.currentState.Name())
-		return
-	}
+	//if !nextState.CheckEntryCondition(f.ctx) {
+	//	fmt.Printf("[FSM] Condition failed for %s. Staying in %s\n", nextState.Name(), f.currentState.Name())
+	//	return
+	//}
 
 	fmt.Printf("[FSM] Transition: %s -> %s\n", f.currentState.Name(), nextState.Name())
 	f.currentState.OnExit(f.ctx)
 	f.currentState = nextState
+	f.currentState.OnEnter(f.ctx)
+}
+
+func (f *FSM) returnToInitial() {
+	if f.initialStateID == "" {
+		fmt.Println("[FSM] No initial state configured. Stopping.")
+		f.currentState = nil
+		f.isRunning = false
+		return
+	}
+	nextState, ok := f.states[f.initialStateID]
+	if !ok {
+		fmt.Printf("[FSM] Initial state %s not found. Stopping.\n", f.initialStateID)
+		f.currentState = nil
+		f.isRunning = false
+		return
+	}
+	if !nextState.CheckEntryCondition(f.ctx) {
+		fmt.Printf("[FSM] Initial state %s entry condition failed. Stopping.\n", nextState.Name())
+		f.currentState = nil
+		f.isRunning = false
+		return
+	}
+	fmt.Printf("[FSM] Returning to initial state: %s\n", nextState.Name())
+	f.currentState = nextState
+	f.isRunning = true
 	f.currentState.OnEnter(f.ctx)
 }

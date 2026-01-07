@@ -8,17 +8,33 @@ type BaseState struct {
 	name          string
 	stateType     StateType
 	interruptible bool
+	checkEntry    func(*Context) bool
 }
 
-func (b *BaseState) ID() string                            { return b.id }
-func (b *BaseState) Name() string                          { return b.name }
-func (b *BaseState) Type() StateType                       { return b.stateType }
-func (b *BaseState) IsInterruptible() bool                 { return b.interruptible }
-func (b *BaseState) CheckEntryCondition(ctx *Context) bool { return true } // 默认无条件
-func (b *BaseState) OnEnter(ctx *Context)                  { fmt.Printf("  -> Enter %s\n", b.name) }
-func (b *BaseState) OnExit(ctx *Context)                   { fmt.Printf("  <- Exit %s\n", b.name) }
-func (b *BaseState) OnResume(ctx *Context)                 { fmt.Printf("  -> Resume %s\n", b.name) }
-func (b *BaseState) OnUpdate(ctx *Context) string          { return "" } // 默认保持
+const (
+	Done      = "__DONE__"
+	Interrupt = "__INTERRUPT__"
+)
+
+func (b *BaseState) ID() string { return b.id }
+func (b *BaseState) Name() string {
+	return b.name
+}
+func (b *BaseState) Type() StateType { return b.stateType }
+func (b *BaseState) Children() []State {
+	return nil
+}
+func (b *BaseState) IsInterruptible() bool { return b.interruptible }
+func (b *BaseState) CheckEntryCondition(ctx *Context) bool {
+	if b.checkEntry != nil {
+		return b.checkEntry(ctx)
+	}
+	return true
+}
+func (b *BaseState) OnEnter(ctx *Context)         { fmt.Printf("  -> Enter %s\n", b.name) }
+func (b *BaseState) OnExit(ctx *Context)          { fmt.Printf("  <- Exit %s\n", b.name) }
+func (b *BaseState) OnResume(ctx *Context)        { fmt.Printf("  -> Resume %s\n", b.name) }
+func (b *BaseState) OnUpdate(ctx *Context) string { return "" } // 默认保持
 
 // WorkAction 定义工作状态的具体行为逻辑
 // 返回值: nextStateID (""表示继续当前状态, "__DONE__"表示结束, 其他值为跳转目标)
@@ -30,13 +46,18 @@ type WorkState struct {
 	action WorkAction
 }
 
-func NewWorkState(id, name string, action WorkAction) *WorkState {
+func (w *WorkState) Children() []State {
+	return nil
+}
+
+func NewWorkState(id, name string, action WorkAction, check func(ctx *Context) bool) *WorkState {
 	return &WorkState{
 		BaseState: BaseState{
 			id:            id,
 			name:          name,
 			stateType:     WorkStateType,
 			interruptible: true, // 允许打断
+			checkEntry:    check,
 		},
 		action: action,
 	}
@@ -46,13 +67,17 @@ func (w *WorkState) OnUpdate(ctx *Context) string {
 	if w.action != nil {
 		return w.action(ctx)
 	}
-	return "__DONE__"
+	return Done
 }
 
 // TaskState 高优先级任务状态
 type TaskState struct {
 	BaseState
 	action func()
+}
+
+func (t *TaskState) Children() []State {
+	return nil
 }
 
 func NewTaskState(id, name string, action func()) *TaskState {
@@ -72,7 +97,7 @@ func (t *TaskState) OnUpdate(ctx *Context) string {
 	if t.action != nil {
 		t.action()
 	}
-	return "__DONE__" // 任务通常是一次性的，执行完即结束
+	return Done // 任务通常是一次性的，执行完即结束
 }
 
 // VirtualState 虚拟状态 (管理子节点)
@@ -91,6 +116,10 @@ type VirtualState struct {
 	// 当进入 VirtualState 时，它自动把 Context 指向第一个 Child。
 	// 它的 OnUpdate 逻辑检查 Child 是否完成。
 	// 这需要 VirtualState 维护自己的 "Sub-FSM" 或者仅仅是一个简单的状态序列。
+}
+
+func (v *VirtualState) Children() []State {
+	return nil
 }
 
 func NewVirtualState(id, name string, children []string) *VirtualState {
@@ -141,56 +170,91 @@ func NewVirtualState(id, name string, children []string) *VirtualState {
 
 type CompositeState struct {
 	BaseState
-	children []State
-	current  int
+	children  []State
+	current   int
+	RouterKey string
+	selector  func(*Context, []State) int
 }
 
-func NewCompositeState(id, name string, children []State) *CompositeState {
-	return &CompositeState{
+func (c *CompositeState) Children() []State {
+	return c.children
+}
+
+func NewCompositeState(id, name string, children []State, check func(ctx *Context) bool) *CompositeState {
+	cs := &CompositeState{
 		BaseState: BaseState{
 			id:            id,
 			name:          name,
 			stateType:     VirtualStateType,
 			interruptible: true,
+			checkEntry:    check,
 		},
-		children: children,
+		children:  children,
+		RouterKey: name,
 	}
+	return cs
+}
+func (c *CompositeState) SetRouterKey(key string) {
+	c.RouterKey = key
+}
+
+func (c *CompositeState) SetSelect(s func(*Context, []State) int) {
+	c.selector = s
 }
 
 func (c *CompositeState) OnEnter(ctx *Context) {
 	c.BaseState.OnEnter(ctx)
-	c.current = 0
-	if len(c.children) > 0 {
-		c.children[0].OnEnter(ctx)
+	start := 0
+	// 外部选择children,返回索引，实际是操作routerKey
+	if c.selector != nil {
+		idx := c.selector(ctx, c.children)
+		if idx >= 0 && idx < len(c.children) {
+			start = idx
+		}
 	}
+	c.current = start
+	// 让selector来做
+	//if c.routerKey != "" && len(c.children) > 0 {
+	//	ctx.Data[c.routerKey] = c.children[c.current].ID()
+	//}
+	//if len(c.children) > 0 {
+	//	if c.children[c.current].CheckEntryCondition(ctx) {
+	//		c.children[c.current].OnEnter(ctx)
+	//	} else {
+	//		fmt.Printf("  [Composite] Selected child %s blocked by entry condition\n", c.children[c.current].Name())
+	//	}
+	//}
 }
 
 func (c *CompositeState) OnUpdate(ctx *Context) string {
 	if c.current >= len(c.children) {
-		return "__DONE__"
+		return Done
 	}
-
 	child := c.children[c.current]
+	//for idx, _ := range c.children {
+	//	if nextChild.CheckEntryCondition(ctx) {
+	//		child = nextChild
+	//		c.current = idx
+	//		break
+	//	}
+	//}
+	for idx := c.current; idx < len(c.children); idx++ {
+		nextChild := c.children[idx]
+		if nextChild.CheckEntryCondition(ctx) {
+			child = nextChild
+			c.current = idx
+			break
+		}
+	}
+	child.OnEnter(ctx)
 	// 代理执行子状态
 	result := child.OnUpdate(ctx)
-
-	if result == "__DONE__" {
+	if result == Done {
 		child.OnExit(ctx)
-		c.current++
-		if c.current < len(c.children) {
-			// 进入下一个子状态
-			nextChild := c.children[c.current]
-			// 检查进入条件
-			if nextChild.CheckEntryCondition(ctx) {
-				nextChild.OnEnter(ctx)
-			} else {
-				// 条件不满足，跳过或结束？这里简单处理为跳过
-				fmt.Printf("  [Composite] Skipping %s (Condition failed)\n", nextChild.Name())
-				c.current++ // 递归检查下一个太复杂，这里简化为下一帧处理
-			}
-		} else {
-			return "__DONE__"
+		if c.RouterKey != "" {
+			delete(ctx.Data, c.RouterKey)
 		}
+		return Done
 	} else if result != "" {
 		// 子状态请求跳转？
 		// 在复合状态内部跳转比较复杂，这里假设子状态只能返回 DONE 或 空
@@ -204,9 +268,9 @@ func (c *CompositeState) OnUpdate(ctx *Context) string {
 
 func (c *CompositeState) OnExit(ctx *Context) {
 	// 退出时，如果当前子状态还在运行，也要退出
-	if c.current < len(c.children) {
-		c.children[c.current].OnExit(ctx)
-	}
+	//if c.current < len(c.children) {
+	//	c.children[c.current].OnExit(ctx)
+	//}
 	c.BaseState.OnExit(ctx)
 }
 
