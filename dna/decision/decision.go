@@ -16,3 +16,5 @@ func BuildStateTree() {
 		log.Fatal(err)
 	}
 }
+
+func BuildFSM() {}
