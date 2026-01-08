@@ -12,7 +12,7 @@ import (
 	"blood/schema"
 )
 
-var defaultSystemPrompt = "你是一个智能助手，你的回答必须符合中文语法规范。"
+const defaultSystemPrompt = "你是一个智能助手，你的回答必须符合中文语法规范。"
 
 type LLMAdapter interface {
 	Chat(userMessages []*schema.OpenAIMessage, systemPrompt ...string) (string, error)

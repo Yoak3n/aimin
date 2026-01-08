@@ -3,6 +3,8 @@ package helper
 import (
 	"blood/adapter"
 	"blood/config"
+	"blood/dao/controller"
+	"blood/dao/implements"
 	"encoding/json"
 	"os"
 	"sync"
@@ -27,4 +29,8 @@ func UseLLM() *adapter.LLMAdapterHub {
 		}
 	})
 	return hub
+}
+
+func UseDB() *implements.Database {
+	return controller.GetDB()
 }

@@ -19,7 +19,7 @@ func InitDatabase(db *gorm.DB, dim int) error {
 	if err := MetacognitionTable(db); err != nil {
 		return err
 	}
-	return db.AutoMigrate(schema.DialogueRecord{}, schema.EntityTable{}, schema.MetacognitionLinkTable{})
+	return db.AutoMigrate(schema.ConversationRecord{}, schema.DialogueRecord{}, schema.EntityTable{}, schema.MetacognitionLinkTable{})
 }
 
 func AddVectorExtension(db *gorm.DB) error {

@@ -2,14 +2,22 @@ package implements
 
 import "blood/schema"
 
-func (d *Database) CreateDialogueRecord(r schema.DialogueRecord) {
-
+func (d *Database) CreateDialogueRecord(r schema.DialogueRecord) error {
+	db := d.GetPostgresSQL()
+	return db.Create(&r).Error
 }
 
 func (d *Database) QueryDialogueRecord(id string) schema.DialogueRecord {
 	var ret schema.DialogueRecord
 	db := d.GetPostgresSQL()
 	db.Where("id = ?", id).First(&ret)
+	return ret
+}
+
+func (d *Database) QueryDialogueRecords(conversationId string) []schema.DialogueRecord {
+	var ret []schema.DialogueRecord
+	db := d.GetPostgresSQL()
+	db.Find(&ret).Where("conversation_id = ?", conversationId).Order("created_at desc")
 	return ret
 }
 

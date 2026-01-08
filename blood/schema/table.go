@@ -6,14 +6,24 @@ import (
 	"gorm.io/gorm"
 )
 
-type DialogueRecord struct {
-	Id        string `json:"id" gorm:"primarykey"`
-	Role      string `json:"role"`
-	Content   string `json:"content"`
-	Link      string
+type ConversationRecord struct {
+	Id        string `json:"id" gorm:"primary key"`
+	Topic     string
+	From      string
 	CreateAt  time.Time
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt `gorm:"index"`
+}
+
+type DialogueRecord struct {
+	Id             string `json:"id" gorm:"primary key"`
+	Role           string `json:"role"`
+	Content        string `json:"content"`
+	Link           string
+	ConversationId string `json:"conversation_id"`
+	CreateAt       time.Time
+	UpdatedAt      time.Time
+	DeletedAt      gorm.DeletedAt `gorm:"index"`
 }
 
 type TemporaryMemoryTable struct {
