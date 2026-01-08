@@ -10,11 +10,11 @@ func (d *Database) CreateConversationRecord(r schema.ConversationRecord) error {
 	return db.Create(&r).Error
 }
 
-func (d *Database) GetConversationRecord(id string) schema.ConversationRecord {
+func (d *Database) GetConversationRecord(id string) (schema.ConversationRecord, error) {
 	db := d.GetPostgresSQL()
 	var r schema.ConversationRecord
-	db.Where("id = ?", id).First(&r)
-	return r
+	err := db.Where("id = ?", id).First(&r).Error
+	return r, err
 }
 
 func (d *Database) UpdateConversationOnlyTime(id string, update time.Time) {

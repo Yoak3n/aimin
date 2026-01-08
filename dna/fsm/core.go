@@ -58,7 +58,7 @@ type FSM struct {
 	initialStateID string
 	// 任务队列 (高优先级)
 	taskQueue []State
-
+	//task      chan TaskData
 	// 中断栈 (用于保存被中断的状态)
 	interruptStack []State
 
@@ -69,21 +69,13 @@ type FSM struct {
 
 func NewFSM() *FSM {
 	return &FSM{
-		states:         make(map[string]State),
-		taskQueue:      make([]State, 0),
+		states:    make(map[string]State),
+		taskQueue: make([]State, 0),
+		//task:           make(chan TaskData),
 		interruptStack: make([]State, 0),
 		ctx:            NewContext(),
 	}
 }
-
-// RegisterState 注册状态
-// RegisterState 是FSM结构体的一个方法，用于注册一个新的状态
-// 参数:
-//   - s: 要注册的状态，实现了State接口
-//
-// 功能:
-//
-//	将传入的状态s以其ID为键存储到f.states映射中，使FSM能够识别和管理该状态
 func (f *FSM) RegisterState(s State) {
 	f.states[s.ID()] = s // 将状态s存储到states映射中，键为状态的ID
 	children := s.Children()
@@ -116,7 +108,6 @@ func (f *FSM) Start(initialStateID string) {
 
 	f.currentState = startState
 	f.isRunning = true
-	fmt.Printf("[FSM] Start. Initial State: %s\n", f.currentState.Name())
 	f.currentState.OnEnter(f.ctx)
 }
 
@@ -136,7 +127,7 @@ func (f *FSM) Update() {
 			// 执行中断逻辑
 			f.taskQueue = f.taskQueue[1:] // 移除任务
 			f.interrupt(nextTask)
-			return // 本次Update周期已用于切换状态
+			return
 		} else if f.currentState.Type() == VirtualStateType {
 			// 虚拟状态通常只是容器，是否打断取决于具体设计。
 			// 假设虚拟状态如果不执行具体Work逻辑，可以被打断，或者它只是个壳。
@@ -257,4 +248,10 @@ func (f *FSM) returnToInitial() {
 	f.currentState = nextState
 	f.isRunning = true
 	f.currentState.OnEnter(f.ctx)
+}
+
+func (f *FSM) CloseFSM() {
+	f.isRunning = false
+	f.currentState = nil
+	//close(f.task)
 }

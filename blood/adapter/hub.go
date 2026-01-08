@@ -96,7 +96,7 @@ func (h *LLMAdapterHub) getAdapterByType(llmType config.LLMType) (LLMAdapter, er
 	return h.Adapters[selectedKey], nil
 }
 
-func (h *LLMAdapterHub) Chat(userMessages []*schema.OpenAIMessage, systemPrompt string) (string, error) {
+func (h *LLMAdapterHub) Chat(userMessages []schema.OpenAIMessage, systemPrompt string) (string, error) {
 	adapter, err := h.getAdapterByType(config.LLMTypeChat)
 	if err != nil {
 		return "", err

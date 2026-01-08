@@ -17,7 +17,7 @@ func (d *Database) QueryDialogueRecord(id string) schema.DialogueRecord {
 func (d *Database) QueryDialogueRecords(conversationId string) []schema.DialogueRecord {
 	var ret []schema.DialogueRecord
 	db := d.GetPostgresSQL()
-	db.Find(&ret).Where("conversation_id = ?", conversationId).Order("created_at desc")
+	db.Where("conversation_id = ?", conversationId).Order("created_at asc").Find(&ret)
 	return ret
 }
 

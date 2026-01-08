@@ -7,8 +7,8 @@ import (
 
 func NewStateTree() *fsm.FSM {
 	tree := fsm.NewFSM()
-	root := newRootNode()
-	tree.RegisterState(root)
+	tree.RegisterState(newRootNode())
+	tree.RegisterState(NewTaskState())
 	return tree
 }
 

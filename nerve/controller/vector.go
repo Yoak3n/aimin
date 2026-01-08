@@ -38,11 +38,11 @@ func FetchMemoryStrategy(messages []schema.OpenAIMessage) string {
 - subject_type/object_type：填写实体类型，如“人物/组织/地点/物品/事件/概念”等
 - predicate：使用动词或关系短语，如“喜欢/位于/属于/承诺/认识/工作于/发生于”等
 - 若抽取不到三元组但仍属长期记忆，可用 content 填稳定事实陈述`
-	userPrompt := &schema.OpenAIMessage{
+	userPrompt := schema.OpenAIMessage{
 		Role:    "user",
 		Content: formatMessage,
 	}
-	answer, err := helper.UseLLM().Chat([]*schema.OpenAIMessage{userPrompt}, systemPrompt)
+	answer, err := helper.UseLLM().Chat([]schema.OpenAIMessage{userPrompt}, systemPrompt)
 	if err != nil {
 		return ""
 	}

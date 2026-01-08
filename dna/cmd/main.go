@@ -2,7 +2,7 @@ package main
 
 import (
 	"blood/pkg/logger"
-	"dna/decision"
+	// "dna/decision"
 )
 
 func init() {
@@ -10,5 +10,5 @@ func init() {
 }
 
 func main() {
-	decision.BuildStateTree()
+	// decision.BuildStateTree()
 }

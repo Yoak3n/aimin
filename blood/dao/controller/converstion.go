@@ -4,18 +4,12 @@ import (
 	"blood/pkg/util"
 	"blood/schema"
 	"errors"
+	"time"
 )
 
-func CreateDialogueWithConversation(message schema.OpenAIMessage, data ...schema.ConversationData) error {
-	if len(data) > 0 {
-		conversation := schema.ConversationRecord{
-			Id:   data[0].Id,
-			From: data[0].From,
-		}
-		err := db.UpdateConversationRecord(conversation)
-		if err != nil {
-			return err
-		}
+func CreateDialogueWithConversation(message schema.OpenAIMessage, id ...string) error {
+	if len(id) > 0 {
+		db.UpdateConversationOnlyTime(id[0], time.Now())
 	}
 	dialogue := schema.DialogueRecord{
 		Id:      util.RandomIdWithPrefix("dialogue-"),

@@ -7,12 +7,13 @@ import (
 )
 
 type ConversationRecord struct {
-	Id        string `json:"id" gorm:"primary key"`
-	Topic     string
-	From      string
-	CreateAt  time.Time
-	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt `gorm:"index"`
+	Id           string `json:"id" gorm:"primary key"`
+	Topic        string `json:"topic"`
+	From         string `json:"from"`
+	SystemPrompt string `json:"system_prompt"`
+	CreateAt     time.Time
+	UpdatedAt    time.Time
+	DeletedAt    gorm.DeletedAt `gorm:"index"`
 }
 
 type DialogueRecord struct {

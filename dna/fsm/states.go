@@ -73,14 +73,14 @@ func (w *WorkState) OnUpdate(ctx *Context) string {
 // TaskState 高优先级任务状态
 type TaskState struct {
 	BaseState
-	action func()
+	action func(ctx *Context)
 }
 
 func (t *TaskState) Children() []State {
 	return nil
 }
 
-func NewTaskState(id, name string, action func()) *TaskState {
+func NewTaskState(id, name string, action func(ctx *Context)) *TaskState {
 	return &TaskState{
 		BaseState: BaseState{
 			id:            id,
@@ -95,7 +95,7 @@ func NewTaskState(id, name string, action func()) *TaskState {
 func (t *TaskState) OnUpdate(ctx *Context) string {
 	fmt.Printf("    !!! Executing Task %s !!!\n", t.name)
 	if t.action != nil {
-		t.action()
+		t.action(ctx)
 	}
 	return Done // 任务通常是一次性的，执行完即结束
 }

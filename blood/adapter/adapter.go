@@ -15,7 +15,7 @@ import (
 const defaultSystemPrompt = "你是一个智能助手，你的回答必须符合中文语法规范。"
 
 type LLMAdapter interface {
-	Chat(userMessages []*schema.OpenAIMessage, systemPrompt ...string) (string, error)
+	Chat(userMessages []schema.OpenAIMessage, systemPrompt ...string) (string, error)
 	Embedding(text []string) ([][]float32, error)
 	GetConfig() *config.LLMConfig
 }
@@ -27,7 +27,7 @@ type BaseAdapter struct {
 }
 
 // Chat implements LLMAdapter.
-func (b *BaseAdapter) Chat(userMessages []*schema.OpenAIMessage, systemMessage ...string) (string, error) {
+func (b *BaseAdapter) Chat(userMessages []schema.OpenAIMessage, systemMessage ...string) (string, error) {
 	systemPrompt := ""
 	if len(systemMessage) == 0 {
 		systemPrompt = defaultSystemPrompt
