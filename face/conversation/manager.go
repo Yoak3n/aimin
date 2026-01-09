@@ -4,12 +4,19 @@ import (
 	"blood/dao/controller"
 	"blood/pkg/helper"
 	"blood/schema"
+	"context"
 	"errors"
 	"nerve/reason"
 	"sync"
+	"time"
 
 	"gorm.io/gorm"
 )
+
+type Input struct {
+	question string
+	id       string
+}
 
 type Conversation struct {
 	Id           string                 `json:"id"`
@@ -20,16 +27,24 @@ type Conversation struct {
 type Manager struct {
 	current         string
 	conversationMap map[string]*Conversation
+	data            chan Input
+	timer           *time.Timer
+	ctx             context.Context
+	running         bool
 }
 
 var manager *Manager
 var once sync.Once
 
 func NewManager() *Manager {
-	return &Manager{
+	m := &Manager{
 		current:         "",
 		conversationMap: make(map[string]*Conversation),
+		data:            make(chan Input),
+		ctx:             context.Background(),
 	}
+
+	return m
 }
 
 func GetManager() *Manager {
@@ -39,7 +54,44 @@ func GetManager() *Manager {
 	return manager
 }
 
+func (m *Manager) setTimeout() {
+	if m.timer != nil && m.timer.Stop() {
+		m.timer.Reset(600 * time.Second)
+	} else {
+		m.timer = time.NewTimer(600 * time.Second)
+	}
+}
+
 func (m *Manager) EntryConversation(conversationId string, question string) {
+	if !m.running {
+		m.running = true
+		go m.ConversationLoop()
+	}
+	m.data <- Input{
+		question: question,
+		id:       conversationId,
+	}
+	m.setTimeout()
+
+}
+
+func (m *Manager) ConversationLoop() {
+	for {
+		select {
+		case input := <-m.data:
+			m.executeConversation(input)
+		case <-m.timer.C:
+			m.exitConversation()
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+}
+
+func (m *Manager) executeConversation(data Input) {
+	conversationId := data.id
+	question := data.question
 	questionMessage := schema.OpenAIMessage{Role: "user", Content: question}
 	if _, exist := m.conversationMap[conversationId]; !exist {
 		conversationRecord, err := helper.UseDB().GetConversationRecord(conversationId)
@@ -73,9 +125,7 @@ func (m *Manager) EntryConversation(conversationId string, question string) {
 				systemPrompt: conversationRecord.SystemPrompt,
 			}
 		}
-
 		// 切换当前对话到新对话，不让map继续扩充减少内存占用
-
 	} else {
 		m.conversationMap[conversationId].Messages = append(m.conversationMap[conversationId].Messages, questionMessage)
 	}
@@ -97,4 +147,10 @@ func (m *Manager) EntryConversation(conversationId string, question string) {
 	if err != nil {
 		return
 	}
+}
+
+func (m *Manager) exitConversation() {
+	m.timer.Stop()
+	m.timer = nil
+	m.running = false
 }

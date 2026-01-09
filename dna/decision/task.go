@@ -20,12 +20,13 @@ func NewTaskState() fsm.State {
 
 func executeTask(ctx *fsm.Context) {
 	if d, exist := ctx.Data[TaskDataKey]; exist {
+		// TODO: 根据任务类型执行不同的任务，需要有个地方传入任务数据
 		data, ok := d.(fsm.TaskData)
 		if ok {
 			switch data.Type {
 			case string(Conversation):
 				conversationId := util.RandomIdWithPrefix("conversation-")
-				action.EntryConversationTask(data.Payload.(string), conversationId)
+				action.EntryConversationTask(data.Payload.(string), conversationId, data.ID)
 			}
 		}
 	}
