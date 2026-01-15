@@ -1,8 +1,9 @@
 package decision
 
 import (
-	"dna/fsm"
 	"time"
+
+	"github.com/Yoak3n/aimin/dna/fsm"
 )
 
 func NewSleepNode() *fsm.WorkState {

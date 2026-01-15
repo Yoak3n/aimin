@@ -1,11 +1,12 @@
 package decision
 
 import (
-	"dna/action"
-	"dna/fsm"
 	"fmt"
 	"math/rand/v2"
 	"strings"
+
+	"github.com/Yoak3n/aimin/dna/action"
+	"github.com/Yoak3n/aimin/dna/fsm"
 )
 
 const ExploreChoice = "explore_choice"

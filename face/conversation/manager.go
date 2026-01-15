@@ -1,14 +1,15 @@
 package conversation
 
 import (
-	"blood/dao/controller"
-	"blood/pkg/helper"
-	"blood/schema"
 	"context"
 	"errors"
-	"nerve/reason"
 	"sync"
 	"time"
+
+	"github.com/Yoak3n/aimin/blood/dao/controller"
+	"github.com/Yoak3n/aimin/blood/pkg/helper"
+	"github.com/Yoak3n/aimin/blood/schema"
+	"github.com/Yoak3n/aimin/nerve/reason"
 
 	"gorm.io/gorm"
 )
@@ -43,7 +44,6 @@ func NewManager() *Manager {
 		data:            make(chan Input),
 		ctx:             context.Background(),
 	}
-
 	return m
 }
 
@@ -80,13 +80,15 @@ func (m *Manager) ConversationLoop() {
 		select {
 		case input := <-m.data:
 			m.executeConversation(input)
+		case <-m.ctx.Done():
+			m.exitConversation()
+			return
 		case <-m.timer.C:
 			m.exitConversation()
-			break
+			return
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-
 }
 
 func (m *Manager) executeConversation(data Input) {

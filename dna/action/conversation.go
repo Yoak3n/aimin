@@ -1,9 +1,9 @@
 package action
 
 import (
-	"blood/pkg/helper"
-	"blood/schema"
-	"face/conversation"
+	"github.com/Yoak3n/aimin/blood/pkg/helper"
+	"github.com/Yoak3n/aimin/blood/schema"
+	"github.com/Yoak3n/aimin/face/conversation"
 )
 
 func EntryConversationTask(question string, conversationID string, from string) {

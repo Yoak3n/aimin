@@ -1,10 +1,11 @@
 package controller
 
 import (
-	"blood/pkg/util"
-	"blood/schema"
 	"errors"
 	"time"
+
+	"github.com/Yoak3n/aimin/blood/pkg/util"
+	"github.com/Yoak3n/aimin/blood/schema"
 )
 
 func CreateDialogueWithConversation(message schema.OpenAIMessage, id ...string) error {

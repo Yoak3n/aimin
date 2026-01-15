@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"blood/dao/implements"
+	"github.com/Yoak3n/aimin/blood/dao/implements"
 )
 
 var db *implements.Database

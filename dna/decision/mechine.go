@@ -1,8 +1,9 @@
 package decision
 
 import (
-	"dna/fsm"
 	"math/rand"
+
+	"github.com/Yoak3n/aimin/dna/fsm"
 )
 
 func NewStateTree() *fsm.FSM {

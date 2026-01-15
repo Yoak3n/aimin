@@ -1,8 +1,8 @@
 package controller
 
 import (
-	"blood/pkg/helper"
-	"blood/schema"
+	"github.com/Yoak3n/aimin/blood/pkg/helper"
+	"github.com/Yoak3n/aimin/blood/schema"
 )
 
 func GetCurrentMetacognitionRecords() ([]schema.MetacognitionTable, error) {

@@ -1,8 +1,9 @@
 package implements
 
 import (
-	"blood/schema"
 	"time"
+
+	"github.com/Yoak3n/aimin/blood/schema"
 )
 
 func (d *Database) CreateConversationRecord(r schema.ConversationRecord) error {

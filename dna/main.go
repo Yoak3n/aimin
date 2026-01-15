@@ -1,8 +1,9 @@
 package main
 
 import (
-	"dna/decision"
 	"time"
+
+	"github.com/Yoak3n/aimin/dna/decision"
 )
 
 func main() {

@@ -1,13 +1,14 @@
 package helper
 
 import (
-	"blood/adapter"
-	"blood/config"
-	"blood/dao/controller"
-	"blood/dao/implements"
 	"encoding/json"
 	"os"
 	"sync"
+
+	"github.com/Yoak3n/aimin/blood/adapter"
+	"github.com/Yoak3n/aimin/blood/config"
+	"github.com/Yoak3n/aimin/blood/dao/controller"
+	"github.com/Yoak3n/aimin/blood/dao/implements"
 )
 
 var once sync.Once
