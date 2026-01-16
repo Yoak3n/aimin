@@ -255,3 +255,7 @@ func (f *FSM) CloseFSM() {
 	f.currentState = nil
 	//close(f.task)
 }
+
+func (f *FSM) CurrentStatus() string {
+	return f.currentState.Name()
+}

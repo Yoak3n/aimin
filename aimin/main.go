@@ -1,12 +1,12 @@
 package main
 
 import (
-	"github.com/Yoak3n/aimin/aimin/cmd/app"
+	"github.com/Yoak3n/aimin/aimin/cmd/app/net"
 )
 
 func main() {
-	c := app.GetGlobalComponent()
-	err := c.Router().Run(":8080")
+	s := net.UseService()
+	err := s.Start(8080)
 	if err != nil {
 		panic(err)
 	}
