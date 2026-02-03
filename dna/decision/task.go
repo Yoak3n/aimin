@@ -25,7 +25,8 @@ func executeTask(ctx *fsm.Context) {
 		if ok {
 			switch data.Type {
 			case string(Conversation):
-				conversationId := util.RandomIdWithPrefix("conversation-")
+				//TODO 进入对话任务，需要处理连续对话的情况，不是每次都要创建新的对话
+				conversationId := util.RandomIdWithPrefix("conversation")
 				action.EntryConversationTask(data.Payload.(string), conversationId, data.ID)
 			}
 		}

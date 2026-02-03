@@ -2,6 +2,7 @@ package action
 
 import (
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
+	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/blood/schema"
 	"github.com/Yoak3n/aimin/face/conversation"
 )
@@ -17,5 +18,10 @@ func EntryConversationTask(question string, conversationID string, from string) 
 		return
 	}
 	m := conversation.GetManager()
-	m.EntryConversation(conversationID, question)
+	if m != nil {
+		m.EntryConversation(conversationID, question)
+	}else{
+		logger.Logger.Infoln("conversation manager is invalid")
+	}
+	
 }

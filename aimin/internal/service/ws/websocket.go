@@ -1,7 +1,9 @@
 package ws
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -11,12 +13,20 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type QuestionRequest struct {
+	Content  string
+	AnswerCh chan string
+	Ctx      context.Context
+}
+
 type WebSocketHub struct {
 	clients    map[string]*Client
 	register   chan *Client
 	unregister chan string
 	broadcast  chan []byte
 	Tasks      chan TaskData
+	Answer     chan string
+	AskChan    chan *QuestionRequest
 }
 
 type Client struct {
@@ -45,16 +55,31 @@ func NewWebSocketHub() *WebSocketHub {
 		register:   make(chan *Client),
 		unregister: make(chan string),
 		broadcast:  make(chan []byte),
+		Tasks:      make(chan TaskData),
+		Answer:     make(chan string),
+		AskChan:    make(chan *QuestionRequest),
 	}
 }
 
 func (wh *WebSocketHub) Run() {
 	go wh.sendTask()
+	var pendingQuestions []*QuestionRequest
+	var currentQuestion *QuestionRequest
+
 	for {
 		select {
 		case client := <-wh.register:
 			wh.clients[client.id] = client
 			log.Printf("New connection with %d clients\n", len(wh.clients))
+			// Attempt to send current or pending question to the new client
+			if currentQuestion != nil {
+				wh.sendQuestionToClient(currentQuestion, client)
+			} else if len(pendingQuestions) > 0 {
+				currentQuestion = pendingQuestions[0]
+				pendingQuestions = pendingQuestions[1:]
+				wh.sendQuestion(currentQuestion)
+			}
+
 		case id := <-wh.unregister:
 			if client, ok := wh.clients[id]; ok {
 				cl := WebsocketMessage{
@@ -75,7 +100,57 @@ func (wh *WebSocketHub) Run() {
 					delete(wh.clients, k)
 				}
 			}
+		case req := <-wh.AskChan:
+			pendingQuestions = append(pendingQuestions, req)
+			if currentQuestion == nil && len(wh.clients) > 0 {
+				currentQuestion = pendingQuestions[0]
+				pendingQuestions = pendingQuestions[1:]
+				wh.sendQuestion(currentQuestion)
+			}
+		case answer := <-wh.Answer:
+			if currentQuestion != nil {
+				// Non-blocking send to avoid deadlock if receiver is gone
+				select {
+				case currentQuestion.AnswerCh <- answer:
+				default:
+				}
+				currentQuestion = nil
+				// Send next question if any
+				if len(pendingQuestions) > 0 && len(wh.clients) > 0 {
+					currentQuestion = pendingQuestions[0]
+					pendingQuestions = pendingQuestions[1:]
+					wh.sendQuestion(currentQuestion)
+				}
+			}
 		}
+	}
+}
+
+func (wh *WebSocketHub) sendQuestion(req *QuestionRequest) {
+	msg := WebsocketMessage{
+		Action: AskMessage,
+		Data:   req.Content,
+	}
+	buf, _ := json.Marshal(msg)
+	// Broadcast to all clients (or specific logic if needed)
+	// Currently using broadcast mechanism within Hub logic
+	for k, client := range wh.clients {
+		if err := client.conn.WriteMessage(websocket.TextMessage, buf); err != nil {
+			client.conn.Close()
+			delete(wh.clients, k)
+		}
+	}
+}
+
+func (wh *WebSocketHub) sendQuestionToClient(req *QuestionRequest, client *Client) {
+	msg := WebsocketMessage{
+		Action: AskMessage,
+		Data:   req.Content,
+	}
+	buf, _ := json.Marshal(msg)
+	if err := client.conn.WriteMessage(websocket.TextMessage, buf); err != nil {
+		// handle error
+		log.Println("Error sending question to new client:", err)
 	}
 }
 
@@ -151,6 +226,13 @@ func (wh *WebSocketHub) listen(id string, conn *websocket.Conn) {
 				log.Println("task data unmarshal err:", err)
 			}
 			wh.Tasks <- taskData
+		case AnswerMessage:
+			if ans, ok := messageData.Data.(string); ok {
+				wh.Answer <- ans
+			} else {
+				// Try to convert if it's not directly a string (e.g. interface{})
+				wh.Answer <- fmt.Sprint(messageData.Data)
+			}
 		}
 		client, ok := wh.clients[id]
 		if ok {
@@ -190,4 +272,21 @@ func (wh *WebSocketHub) BroadcastLog(content string) {
 	logItem := NewLogMessage(content)
 	buf, _ := json.Marshal(logItem)
 	wh.Broadcast(buf)
+}
+
+func (wh *WebSocketHub) Ask(ctx context.Context, question string) []string {
+	answerCh := make(chan string)
+	req := &QuestionRequest{
+		Content:  question,
+		AnswerCh: answerCh,
+		Ctx:      ctx,
+	}
+	wh.AskChan <- req
+
+	select {
+	case answer := <-answerCh:
+		return []string{answer}
+	case <-ctx.Done():
+		return []string{}
+	}
 }

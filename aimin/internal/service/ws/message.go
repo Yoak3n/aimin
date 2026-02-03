@@ -16,6 +16,8 @@ const (
 	CloseMessage     ActionType = "Close"
 	PingMessage      ActionType = "Ping"
 	PongMessage      ActionType = "Pong"
+	AskMessage       ActionType = "Ask"
+	AnswerMessage    ActionType = "Answer"
 )
 
 type LogMessageData struct {
@@ -38,7 +40,7 @@ func NewLogMessageData(content string) LogMessageData {
 }
 
 type TaskData struct {
-	Id   string
-	Type string
-	Payload any
+	Id      string `json:"id"`
+	Type    string `json:"type"`
+	Payload any    `json:"payload"`
 }

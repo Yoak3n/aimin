@@ -31,9 +31,15 @@ func (b *BaseState) CheckEntryCondition(ctx *Context) bool {
 	}
 	return true
 }
-func (b *BaseState) OnEnter(ctx *Context)         { fmt.Printf("  -> Enter %s\n", b.name) }
-func (b *BaseState) OnExit(ctx *Context)          { fmt.Printf("  <- Exit %s\n", b.name) }
-func (b *BaseState) OnResume(ctx *Context)        { fmt.Printf("  -> Resume %s\n", b.name) }
+func (b *BaseState) OnEnter(ctx *Context) {
+	// fmt.Printf("  -> Enter %s\n", b.name)
+}
+func (b *BaseState) OnExit(ctx *Context) {
+	// fmt.Printf("  <- Exit %s\n", b.name)
+}
+func (b *BaseState) OnResume(ctx *Context) {
+	// fmt.Printf("  -> Resume %s\n", b.name)
+}
 func (b *BaseState) OnUpdate(ctx *Context) string { return "" } // 默认保持
 
 // WorkAction 定义工作状态的具体行为逻辑

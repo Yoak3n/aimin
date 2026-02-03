@@ -5,6 +5,7 @@ import (
 	"github.com/Yoak3n/aimin/aimin/internal/service/router"
 	"github.com/Yoak3n/aimin/aimin/internal/service/ws"
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
+	"github.com/Yoak3n/aimin/dna/action"
 )
 
 func main() {
@@ -13,6 +14,7 @@ func main() {
 	go hub.Run()
 	logger.Init()
 	logger.SetExternalHandler(hub.BroadcastLog)
+	action.RemoteAsk = hub.Ask
 
 	c := componet.GetGlobalComponent()
 	go c.Start()
