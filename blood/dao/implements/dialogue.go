@@ -1,6 +1,6 @@
 package implements
 
-import "blood/schema"
+import "github.com/Yoak3n/aimin/blood/schema"
 
 func (d *Database) CreateDialogueRecord(r schema.DialogueRecord) error {
 	db := d.GetPostgresSQL()

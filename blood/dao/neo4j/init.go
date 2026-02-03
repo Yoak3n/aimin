@@ -6,7 +6,7 @@ import (
 	"log"
 	"regexp"
 
-	"blood/schema"
+	"github.com/Yoak3n/aimin/blood/schema"
 
 	"github.com/neo4j/neo4j-go-driver/v6/neo4j"
 )

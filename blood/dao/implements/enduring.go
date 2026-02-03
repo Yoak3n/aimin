@@ -3,8 +3,8 @@ package implements
 import (
 	"log"
 
-	"blood/pkg/util"
-	"blood/schema"
+	"github.com/Yoak3n/aimin/blood/pkg/util"
+	"github.com/Yoak3n/aimin/blood/schema"
 )
 
 func (d *Database) CreateEnduringTableRecord(e schema.EnduringMemoryTable, embedding []float32) error {

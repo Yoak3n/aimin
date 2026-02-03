@@ -1,6 +1,6 @@
 package implements
 
-import "blood/schema"
+import "github.com/Yoak3n/aimin/blood/schema"
 
 func (d *Database) CreateMetacognitionRecord(r schema.MetacognitionTable) error {
 	db := d.GetPostgresSQL()

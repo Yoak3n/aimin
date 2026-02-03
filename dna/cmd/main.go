@@ -1,7 +1,7 @@
 package main
 
 import (
-	"blood/pkg/logger"
+	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	// "dna/decision"
 )
 

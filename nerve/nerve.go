@@ -1,13 +1,13 @@
 package nerve
 
 import (
-	"blood/pkg/helper"
-	"blood/pkg/util"
-	"blood/schema"
+	"github.com/Yoak3n/aimin/blood/pkg/helper"
+	"github.com/Yoak3n/aimin/blood/pkg/util"
+	"github.com/Yoak3n/aimin/blood/schema"
 	"errors"
 	"log"
-	nc "nerve/controller"
-	"nerve/memory"
+	nc "github.com/Yoak3n/aimin/nerve/controller"
+	"github.com/Yoak3n/aimin/nerve/memory"
 	"strings"
 	"time"
 

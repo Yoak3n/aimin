@@ -1,13 +1,14 @@
 package adapter
 
 import (
-	"blood/pkg/logger"
 	"fmt"
 	"math/rand/v2"
 	"sync"
 
-	"blood/config"
-	"blood/schema"
+	"github.com/Yoak3n/aimin/blood/pkg/logger"
+
+	"github.com/Yoak3n/aimin/blood/config"
+	"github.com/Yoak3n/aimin/blood/schema"
 )
 
 type LLMAdapterHub struct {

@@ -6,9 +6,9 @@ import (
 	"log"
 	"time"
 
-	"blood/config"
-	neo4j "blood/dao/neo4j"
-	pg "blood/dao/pg"
+	"github.com/Yoak3n/aimin/blood/config"
+	neo4j "github.com/Yoak3n/aimin/blood/dao/neo4j"
+	pg "github.com/Yoak3n/aimin/blood/dao/pg"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"

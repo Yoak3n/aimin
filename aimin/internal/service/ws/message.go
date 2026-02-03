@@ -40,4 +40,5 @@ func NewLogMessageData(content string) LogMessageData {
 type TaskData struct {
 	Id   string
 	Type string
+	Payload any
 }

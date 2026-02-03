@@ -41,7 +41,7 @@ AI MIN (Artificial Intelligence Mind) 是一个基于仿生学架构设计的智
 
 - **Language**: Go 1.25+
 - **Database**:
-  - PostgreSQL (结构化数据存储)
+  - PostgreSQL with Vector plugin (结构化数据存储)
   - Neo4j (知识图谱与关联记忆)
 - **AI Integration**: OpenAI API (或其他兼容 LLM)
 
@@ -64,9 +64,9 @@ AI MIN (Artificial Intelligence Mind) 是一个基于仿生学架构设计的智
    ```
 
 3. **运行程序**
-   程序入口位于 `dna` 模块中。
+   程序入口位于 `aimin` 模块中。
    ```bash
-   cd dna
+   cd aimin
    go run .
    ```
 
@@ -74,6 +74,7 @@ AI MIN (Artificial Intelligence Mind) 是一个基于仿生学架构设计的智
 
 ```
 e:\Project\GoProject\codes\aimin
+|── aimin/  # 程序入口
 ├── blood/      # 基础设施与数据层
 ├── dna/        # 核心状态机与入口
 ├── face/       # 交互与对话管理

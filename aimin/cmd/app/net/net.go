@@ -23,7 +23,6 @@ func UseService() *Service {
 			router: router.InitRouter(),
 			hub:    ws.NewWebSocketHub(),
 		}
-
 	})
 	return Srv
 }

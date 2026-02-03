@@ -259,3 +259,24 @@ func (f *FSM) CloseFSM() {
 func (f *FSM) CurrentStatus() string {
 	return f.currentState.Name()
 }
+
+func (f *FSM) UpdateContext(key string, value interface{}) {
+	if f.ctx == nil {
+		f.ctx = NewContext()
+	}
+	f.ctx.Data[key] = value
+}
+
+func (f *FSM) GetContext(key string) interface{} {
+	if f.ctx == nil {
+		return nil
+	}
+	return f.ctx.Data[key]
+}
+
+func (f *FSM) DeleteContext(key string) {
+	if f.ctx == nil {
+		return
+	}
+	delete(f.ctx.Data, key)
+}

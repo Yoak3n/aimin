@@ -151,8 +151,16 @@ func (wh *WebSocketHub) listen(id string, conn *websocket.Conn) {
 
 func (wh *WebSocketHub) sendTask() {
 	for task := range wh.Tasks {
-		state := fsm.NewTaskState(task.Id, task.Type, nil)
-		componet.GetGlobalComponent().FSM().AddTask(state)
+		fsmTask := fsm.TaskData{
+			ID:   task.Id,
+			Type: task.Type,
+			Name: task.Id,
+			// 后续看情况处理任务优先级
+			Priority: 5,
+			// 需要放入任务的负载数据
+			Payload: task.Payload,
+		}
+		componet.GetGlobalComponent().AddTask(fsmTask)
 	}
 }
 

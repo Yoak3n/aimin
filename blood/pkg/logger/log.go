@@ -1,11 +1,12 @@
 package logger
 
 import (
-	"blood/pkg/util"
 	"bytes"
 	"fmt"
 	"os"
 	"path"
+
+	"github.com/Yoak3n/aimin/blood/pkg/util"
 
 	"github.com/sirupsen/logrus"
 )

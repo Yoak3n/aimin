@@ -1,10 +1,13 @@
 package main
 
 import (
+	"github.com/Yoak3n/aimin/aimin/cmd/app/componet"
 	"github.com/Yoak3n/aimin/aimin/cmd/app/net"
 )
 
 func main() {
+	c := componet.GetGlobalComponent()
+	go c.Start()
 	s := net.UseService()
 	err := s.Start(8080)
 	if err != nil {

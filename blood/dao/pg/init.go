@@ -1,7 +1,7 @@
 package database
 
 import (
-	"blood/schema"
+	"github.com/Yoak3n/aimin/blood/schema"
 
 	"gorm.io/gorm"
 )

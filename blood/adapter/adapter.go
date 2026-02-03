@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"sync"
 
-	"blood/config"
-	"blood/schema"
+	"github.com/Yoak3n/aimin/blood/config"
+	"github.com/Yoak3n/aimin/blood/schema"
 )
 
 const defaultSystemPrompt = "你是一个智能助手，你的回答必须符合中文语法规范。"

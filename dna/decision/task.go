@@ -1,9 +1,9 @@
 package decision
 
 import (
-	"blood/pkg/util"
-	"dna/action"
-	"dna/fsm"
+	"github.com/Yoak3n/aimin/blood/pkg/util"
+	"github.com/Yoak3n/aimin/dna/action"
+	"github.com/Yoak3n/aimin/dna/fsm"
 )
 
 const TaskDataKey = "task_data"
