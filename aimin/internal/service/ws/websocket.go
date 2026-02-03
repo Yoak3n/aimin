@@ -26,6 +26,19 @@ type Client struct {
 	mu   sync.RWMutex
 }
 
+var hub *WebSocketHub
+
+func InitWebSocketHub() {
+	if hub != nil {
+		return
+	}
+	hub = NewWebSocketHub()
+}
+
+func UseWebSocketHub() *WebSocketHub {
+	return hub
+}
+
 func NewWebSocketHub() *WebSocketHub {
 	return &WebSocketHub{
 		clients:    make(map[string]*Client),
@@ -46,7 +59,7 @@ func (wh *WebSocketHub) Run() {
 			if client, ok := wh.clients[id]; ok {
 				cl := WebsocketMessage{
 					Action: CloseMessage,
-					Data:   "Close",
+					Data:   CloseMessage,
 				}
 				client.mu.Lock()
 				client.conn.WriteJSON(cl)
@@ -98,7 +111,7 @@ func (wh *WebSocketHub) healthCheck(client *Client) {
 		log.Println("check successfully")
 		pingMessage := WebsocketMessage{
 			Action: PingMessage,
-			Data:   "ping",
+			Data:   PingMessage,
 		}
 		client.conn.WriteJSON(pingMessage)
 		client.mu.RUnlock()
@@ -126,7 +139,7 @@ func (wh *WebSocketHub) listen(id string, conn *websocket.Conn) {
 		case PingMessage:
 			pongMessage := WebsocketMessage{
 				Action: PongMessage,
-				Data:   "pong",
+				Data:   PongMessage,
 			}
 			conn.WriteJSON(pongMessage)
 		case AddTaskMessage:
@@ -167,4 +180,14 @@ func (wh *WebSocketHub) sendTask() {
 func sendLog(conn *websocket.Conn, content string) {
 	logItem := NewLogMessage(content)
 	conn.WriteJSON(logItem)
+}
+
+func (wh *WebSocketHub) Broadcast(message []byte) {
+	wh.broadcast <- message
+}
+
+func (wh *WebSocketHub) BroadcastLog(content string) {
+	logItem := NewLogMessage(content)
+	buf, _ := json.Marshal(logItem)
+	wh.Broadcast(buf)
 }

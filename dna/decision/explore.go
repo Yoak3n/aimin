@@ -1,10 +1,10 @@
 package decision
 
 import (
-	"fmt"
 	"math/rand/v2"
 	"strings"
 
+	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/dna/action"
 	"github.com/Yoak3n/aimin/dna/fsm"
 )
@@ -66,7 +66,7 @@ func createConceptQuestion(t string) string {
 		graph := append(chain, key)
 		question = strings.Join(graph, " -> ")
 	}
-	fmt.Println("[Explore] Question: ", question)
+	logger.Logger.Infof("[Explore] Question: %s", question)
 	return question
 }
 

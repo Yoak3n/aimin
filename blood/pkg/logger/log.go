@@ -20,11 +20,20 @@ type Hook struct {
 	driverFile *os.File
 }
 
+var externalHandler func(string)
+
+func SetExternalHandler(h func(string)) {
+	externalHandler = h
+}
+
 func (h *Hook) Levels() []logrus.Level { return logrus.AllLevels }
 func (h *Hook) Fire(entry *logrus.Entry) error {
 	line, err := entry.String()
 	if err != nil {
 		return err
+	}
+	if externalHandler != nil {
+		externalHandler(entry.Message)
 	}
 	if entry.Level == logrus.ErrorLevel || entry.Level == logrus.FatalLevel || entry.Level == logrus.PanicLevel {
 		_, err = h.errorFile.Write([]byte(line))

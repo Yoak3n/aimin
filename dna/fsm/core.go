@@ -79,10 +79,8 @@ func NewFSM() *FSM {
 func (f *FSM) RegisterState(s State) {
 	f.states[s.ID()] = s // 将状态s存储到states映射中，键为状态的ID
 	children := s.Children()
-	if children != nil {
-		for _, child := range children {
-			f.RegisterState(child)
-		}
+	for _, child := range children {
+		f.RegisterState(child)
 	}
 }
 
@@ -260,14 +258,14 @@ func (f *FSM) CurrentStatus() string {
 	return f.currentState.Name()
 }
 
-func (f *FSM) UpdateContext(key string, value interface{}) {
+func (f *FSM) UpdateContext(key string, value any) {
 	if f.ctx == nil {
 		f.ctx = NewContext()
 	}
 	f.ctx.Data[key] = value
 }
 
-func (f *FSM) GetContext(key string) interface{} {
+func (f *FSM) GetContext(key string) any {
 	if f.ctx == nil {
 		return nil
 	}

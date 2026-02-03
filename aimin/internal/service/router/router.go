@@ -16,6 +16,7 @@ func RegisterRouter(r *gin.Engine) {
 	APIRouter(r)
 	// 查看当前智能体状态
 	// 与智能体交互接口（包括主动提问和被动对话）-> ws？
+	r.GET("/ws/:id", handler.WebsocketHandler)
 }
 
 func APIRouter(r *gin.Engine) {

@@ -10,6 +10,7 @@ import (
 
 type Component struct {
 	fsm *fsm.FSM
+	log chan string
 }
 
 var component *Component
@@ -19,6 +20,7 @@ func GetGlobalComponent() *Component {
 	once.Do(func() {
 		component = &Component{
 			fsm: decision.NewStateTree(),
+			log: make(chan string, 100),
 		}
 	})
 	return component
@@ -41,3 +43,4 @@ func (c *Component) AddTask(data fsm.TaskData) {
 	c.fsm.UpdateContext(decision.TaskDataKey, data)
 	c.fsm.AddTask(task)
 }
+
