@@ -79,5 +79,7 @@ e:\Project\GoProject\codes\aimin
 ├── dna/        # 核心状态机与入口
 ├── face/       # 交互与对话管理
 ├── nerve/      # 记忆与推理引擎
+├── skin/       # 前端界面
+├── README.md   # 项目说明文档
 └── go.work     # Go Workspace 配置
 ```
