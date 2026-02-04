@@ -18,6 +18,7 @@ const (
 	PongMessage      ActionType = "Pong"
 	AskMessage       ActionType = "Ask"
 	AnswerMessage    ActionType = "Answer"
+	ReplyMessage     ActionType = "Reply"
 )
 
 type LogMessageData struct {
@@ -37,10 +38,4 @@ func NewLogMessageData(content string) LogMessageData {
 		Time:    time.Now().Format("2006-01-02 15:04"),
 		Content: content,
 	}
-}
-
-type TaskData struct {
-	Id      string `json:"id"`
-	Type    string `json:"type"`
-	Payload any    `json:"payload"`
 }

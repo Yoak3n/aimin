@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import Chat from './components/Chat.vue';
 import Status from './components/Status.vue';
 import Logs from './components/Logs.vue';
+import Sidebar from './components/Sidebar.vue';
 
 interface LogMessage {
   time: string;
@@ -13,6 +14,10 @@ const logs = ref<LogMessage[]>([]);
 const isConnected = ref(false);
 const currentQuestion = ref<string | null>(null);
 const answerInput = ref('');
+const lastReply = ref<any>(null);
+const sidebarRef = ref<any>(null);
+const selectedConversationId = ref<string | null>(null);
+
 let socket: WebSocket | null = null;
 const clientId = `web-client-${Math.floor(Math.random() * 1000)}`;
 
@@ -44,6 +49,12 @@ const connectWebSocket = () => {
         logs.value.push({
             time: new Date().toLocaleTimeString(),
             content: `Received Question: ${msg.data}`
+        });
+      } else if (msg.action === 'Reply') {
+        lastReply.value = msg.data;
+        logs.value.push({
+            time: new Date().toLocaleTimeString(),
+            content: `Received Reply: ${msg.data.content}`
         });
       }
     } catch (e) {
@@ -98,6 +109,22 @@ const sendTask = (taskData: any) => {
   }
 };
 
+const handleSelectConversation = (id: string) => {
+  selectedConversationId.value = id;
+};
+
+const handleNewChat = () => {
+  selectedConversationId.value = null;
+};
+
+const handleConversationCreated = (id: string) => {
+  selectedConversationId.value = id;
+  // Refresh sidebar list
+  if (sidebarRef.value) {
+    sidebarRef.value.fetchConversations();
+  }
+};
+
 onMounted(() => {
   connectWebSocket();
 });
@@ -111,22 +138,36 @@ onUnmounted(() => {
 
 <template>
   <div class="app-container">
-    <header>
-      <h1>Aimin Dashboard</h1>
-      <span :class="['status-indicator', isConnected ? 'connected' : 'disconnected']">
-        {{ isConnected ? 'Connected' : 'Disconnected' }}
-      </span>
-    </header>
-
-    <main>
-      <div class="left-panel">
-        <Status />
-        <Chat :sendTask="sendTask" />
+    <Sidebar 
+      ref="sidebarRef"
+      @select-conversation="handleSelectConversation"
+      @new-chat="handleNewChat"
+    />
+    
+    <div class="main-content">
+      <div class="chat-wrapper">
+         <Chat 
+           :sendTask="sendTask" 
+           :lastReply="lastReply" 
+           :conversationId="selectedConversationId"
+           @conversation-created="handleConversationCreated"
+         />
       </div>
-      <div class="right-panel">
+    </div>
+    
+    <div class="right-panel">
+      <div class="status-bar">
+        <h3>Status</h3>
+        <span :class="['status-indicator', isConnected ? 'connected' : 'disconnected']">
+          {{ isConnected ? 'Connected' : 'Disconnected' }}
+        </span>
+      </div>
+      <Status />
+      <div class="logs-container">
+        <h3>Logs</h3>
         <Logs :logs="logs" />
       </div>
-    </main>
+    </div>
 
     <div v-if="currentQuestion" class="modal-overlay">
       <div class="modal-content">
@@ -142,6 +183,74 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.app-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background-color: #343541;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+}
+
+.chat-wrapper {
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+}
+
+.right-panel {
+  width: 300px;
+  background-color: #202123;
+  border-left: 1px solid #4d4d4f;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  overflow-y: auto;
+  color: white;
+  flex-shrink: 0;
+}
+
+.status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #4d4d4f;
+}
+
+.status-indicator {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.status-indicator.connected {
+  background-color: #4caf50;
+  color: white;
+}
+
+.status-indicator.disconnected {
+  background-color: #f44336;
+  color: white;
+}
+
+.logs-container {
+  margin-top: 1rem;
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -156,17 +265,19 @@ onUnmounted(() => {
 }
 
 .modal-content {
-  background-color: white;
+  background-color: #343541;
+  color: white;
   padding: 2rem;
   border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   width: 90%;
   max-width: 500px;
   text-align: center;
+  border: 1px solid #565869;
 }
 
 .modal-content h3 {
-  color: #e65100;
+  color: #ff9800;
   margin-top: 0;
 }
 
@@ -183,9 +294,11 @@ onUnmounted(() => {
 .modal-content input {
   flex: 1;
   padding: 0.8rem;
-  border: 1px solid #ccc;
+  border: 1px solid #565869;
   border-radius: 4px;
   font-size: 1rem;
+  background-color: #40414f;
+  color: white;
 }
 
 .modal-content button {
@@ -199,64 +312,6 @@ onUnmounted(() => {
 }
 
 .modal-content button:hover {
-  background-color: #f57c00;
-}
-
-.app-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
-  font-family: Arial, sans-serif;
-}
-
-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
-  border-bottom: 2px solid #eee;
-  padding-bottom: 1rem;
-}
-
-.status-indicator {
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  font-weight: bold;
-  font-size: 0.9rem;
-}
-
-.connected {
-  background-color: #e6fffa;
-  color: #047857;
-  border: 1px solid #047857;
-}
-
-.disconnected {
-  background-color: #fff5f5;
-  color: #c53030;
-  border: 1px solid #c53030;
-}
-
-main {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
-}
-
-@media (max-width: 768px) {
-  main {
-    grid-template-columns: 1fr;
-  }
-}
-
-.left-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.right-panel {
-  display: flex;
-  flex-direction: column;
+  background-color: #e68900;
 }
 </style>

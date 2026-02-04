@@ -11,8 +11,8 @@ type ConversationRecord struct {
 	Topic        string `json:"topic"`
 	From         string `json:"from"`
 	SystemPrompt string `json:"system_prompt"`
-	CreateAt     time.Time
-	UpdatedAt    time.Time
+	CreateAt     time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
 }
 
@@ -21,9 +21,9 @@ type DialogueRecord struct {
 	Role           string `json:"role"`
 	Content        string `json:"content"`
 	Link           string
-	ConversationId string `json:"conversation_id"`
-	CreateAt       time.Time
-	UpdatedAt      time.Time
+	ConversationId string    `json:"conversation_id"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `gorm:"index"`
 }
 

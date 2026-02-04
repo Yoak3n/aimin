@@ -27,4 +27,6 @@ func APIRouter(r *gin.Engine) {
 func registerV1Router(api *gin.RouterGroup) {
 	v1 := api.Group("/v1")
 	v1.GET("/status", handler.StatusHandler)
+	v1.GET("/conversations", handler.ConversationListHandler)
+	v1.GET("/conversations/:id/messages", handler.ConversationDetailHandler)
 }

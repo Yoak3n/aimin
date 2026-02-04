@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"errors"
 	"time"
 
 	"github.com/Yoak3n/aimin/blood/pkg/util"
@@ -9,13 +8,16 @@ import (
 )
 
 func CreateDialogueWithConversation(message schema.OpenAIMessage, id ...string) error {
+	var conversationId string
 	if len(id) > 0 {
-		db.UpdateConversationOnlyTime(id[0], time.Now())
+		conversationId = id[0]
+		db.UpdateConversationOnlyTime(conversationId, time.Now())
 	}
 	dialogue := schema.DialogueRecord{
-		Id:      util.RandomIdWithPrefix("dialogue-"),
-		Role:    message.Role,
-		Content: message.Content,
+		Id:             util.RandomIdWithPrefix("dialogue-"),
+		Role:           message.Role,
+		Content:        message.Content,
+		ConversationId: conversationId,
 	}
 	return db.CreateDialogueRecord(dialogue)
 }
@@ -23,7 +25,11 @@ func CreateDialogueWithConversation(message schema.OpenAIMessage, id ...string) 
 func GetDialoguesWithConversation(id string) ([]schema.DialogueRecord, error) {
 	ds := db.QueryDialogueRecords(id)
 	if ds == nil {
-		return nil, errors.New("no dialogue found")
+		return []schema.DialogueRecord{}, nil
 	}
 	return ds, nil
+}
+
+func GetAllConversations() ([]schema.ConversationRecord, error) {
+	return db.GetAllConversations()
 }

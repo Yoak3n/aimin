@@ -8,20 +8,25 @@ import (
 )
 
 func EntryConversationTask(question string, conversationID string, from string) {
-	record := schema.ConversationRecord{
-		Id:    conversationID,
-		From:  from,
-		Topic: question,
-	}
-	err := helper.UseDB().CreateConversationRecord(record)
+	_, err := helper.UseDB().GetConversationRecord(conversationID)
 	if err != nil {
-		return
+		record := schema.ConversationRecord{
+			Id:    conversationID,
+			From:  from,
+			Topic: question,
+		}
+		err := helper.UseDB().CreateConversationRecord(record)
+		if err != nil {
+			logger.Logger.Errorln("create conversation record failed", err)
+			return
+		}
 	}
+
 	m := conversation.GetManager()
 	if m != nil {
 		m.EntryConversation(conversationID, question)
-	}else{
+	} else {
 		logger.Logger.Infoln("conversation manager is invalid")
 	}
-	
+
 }

@@ -40,17 +40,20 @@ onMounted(() => {
 
 <style scoped>
 .status-container {
-  border: 1px solid #ccc;
+  border: 1px solid #4d4d4f;
   padding: 1rem;
   margin-bottom: 1rem;
   border-radius: 8px;
+  background-color: #343541;
+  color: white;
 }
 .status-display {
-  background: #f4f4f4;
+  background: #202123;
   padding: 0.5rem;
   border-radius: 4px;
   overflow-x: auto;
   max-height: 300px;
+  color: #ececf1;
 }
 .error {
   color: red;

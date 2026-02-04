@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Yoak3n/aimin/aimin/cmd/app/componet"
+	"github.com/Yoak3n/aimin/blood/schema"
 	"github.com/Yoak3n/aimin/dna/fsm"
 	"github.com/gorilla/websocket"
 )
@@ -24,7 +25,7 @@ type WebSocketHub struct {
 	register   chan *Client
 	unregister chan string
 	broadcast  chan []byte
-	Tasks      chan TaskData
+	Tasks      chan schema.TaskData
 	Answer     chan string
 	AskChan    chan *QuestionRequest
 }
@@ -55,7 +56,7 @@ func NewWebSocketHub() *WebSocketHub {
 		register:   make(chan *Client),
 		unregister: make(chan string),
 		broadcast:  make(chan []byte),
-		Tasks:      make(chan TaskData),
+		Tasks:      make(chan schema.TaskData),
 		Answer:     make(chan string),
 		AskChan:    make(chan *QuestionRequest),
 	}
@@ -220,7 +221,7 @@ func (wh *WebSocketHub) listen(id string, conn *websocket.Conn) {
 		case AddTaskMessage:
 			// 无法直接断言为任务数据
 			buf, _ := json.Marshal(messageData.Data)
-			taskData := TaskData{}
+			taskData := schema.TaskData{}
 			err := json.Unmarshal(buf, &taskData)
 			if err != nil {
 				log.Println("task data unmarshal err:", err)

@@ -6,6 +6,7 @@ import (
 	"github.com/Yoak3n/aimin/aimin/internal/service/ws"
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/dna/action"
+	"github.com/Yoak3n/aimin/face/conversation"
 )
 
 func main() {
@@ -15,6 +16,7 @@ func main() {
 	logger.Init()
 	logger.SetExternalHandler(hub.BroadcastLog)
 	action.RemoteAsk = hub.Ask
+	conversation.GetManager().SetReplyHandler(hub.SendReply)
 
 	c := componet.GetGlobalComponent()
 	go c.Start()

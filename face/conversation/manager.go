@@ -31,6 +31,7 @@ type Manager struct {
 	timer           *time.Timer
 	ctx             context.Context
 	running         bool
+	replyHandler    func(id string, content string)
 }
 
 var manager *Manager
@@ -44,6 +45,10 @@ func NewManager() *Manager {
 		ctx:             context.Background(),
 	}
 	return m
+}
+
+func (m *Manager) SetReplyHandler(h func(id string, content string)) {
+	m.replyHandler = h
 }
 
 func GetManager() *Manager {
@@ -160,6 +165,7 @@ func (m *Manager) executeConversation(data Input) {
 					Content: record.Content,
 				})
 			}
+			openAIMessages = append(openAIMessages, questionMessage)
 			m.conversationMap[conversationId] = &Conversation{
 				Id:           conversationId,
 				Messages:     openAIMessages,
@@ -192,6 +198,9 @@ func (m *Manager) executeConversation(data Input) {
 	err = controller.CreateDialogueWithConversation(answerMessage, conversationId)
 	if err != nil {
 		return
+	}
+	if m.replyHandler != nil {
+		m.replyHandler(conversationId, answer)
 	}
 }
 

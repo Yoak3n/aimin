@@ -1,13 +1,10 @@
 <template>
-  <div class="logs-container">
-    <h3>Live Logs</h3>
-    <div class="logs-window" ref="logsWindow">
-      <div v-for="(log, index) in logs" :key="index" class="log-item">
-        <span class="log-time">[{{ log.time }}]</span>
-        <span class="log-content">{{ log.content }}</span>
-      </div>
-      <div v-if="logs.length === 0" class="no-logs">Waiting for logs...</div>
+  <div class="logs-window" ref="logsWindow">
+    <div v-for="(log, index) in logs" :key="index" class="log-item">
+      <span class="log-time">[{{ log.time }}]</span>
+      <span class="log-content">{{ log.content }}</span>
     </div>
+    <div v-if="logs.length === 0" class="no-logs">Waiting for logs...</div>
   </div>
 </template>
 
@@ -35,27 +32,23 @@ watch(() => props.logs.length, () => {
 </script>
 
 <style scoped>
-.logs-container {
-  border: 1px solid #ccc;
-  padding: 1rem;
-  border-radius: 8px;
-  height: 400px;
-  display: flex;
-  flex-direction: column;
-}
 .logs-window {
   flex: 1;
   overflow-y: auto;
-  background: #1e1e1e;
+  background: #202123;
   color: #d4d4d4;
   padding: 0.5rem;
   border-radius: 4px;
   font-family: monospace;
+  height: 100%;
+  border: 1px solid #4d4d4f;
 }
 .log-item {
   margin-bottom: 0.25rem;
   border-bottom: 1px solid #333;
   padding-bottom: 0.25rem;
+  font-size: 0.85rem;
+  word-break: break-all;
 }
 .log-time {
   color: #569cd6;

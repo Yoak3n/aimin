@@ -18,17 +18,14 @@ func (d *Database) GetConversationRecord(id string) (schema.ConversationRecord, 
 	return r, err
 }
 
+func (d *Database) GetAllConversations() ([]schema.ConversationRecord, error) {
+	db := d.GetPostgresSQL()
+	var records []schema.ConversationRecord
+	err := db.Order("updated_at desc").Find(&records).Error
+	return records, err
+}
+
 func (d *Database) UpdateConversationOnlyTime(id string, update time.Time) {
 	db := d.GetPostgresSQL()
-	db.Model(&schema.ConversationRecord{}).Where("id = ?", id).Update("update_time", update)
-}
-
-func (d *Database) UpdateConversationRecord(r schema.ConversationRecord) error {
-	db := d.GetPostgresSQL()
-	return db.Save(&r).Error
-}
-
-func (d *Database) DeleteConversationRecord(id string) {
-	db := d.GetPostgresSQL()
-	db.Where("id = ?", id).Delete(&schema.ConversationRecord{})
+	db.Model(&schema.ConversationRecord{}).Where("id = ?", id).Update("updated_at", update)
 }

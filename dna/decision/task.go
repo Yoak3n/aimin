@@ -1,17 +1,21 @@
 package decision
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"github.com/Yoak3n/aimin/blood/pkg/util"
+	"github.com/Yoak3n/aimin/blood/schema"
 	"github.com/Yoak3n/aimin/dna/action"
 	"github.com/Yoak3n/aimin/dna/fsm"
 )
 
-const TaskDataKey = "task_data"
-
 type TaskType string
 
 const (
-	Conversation TaskType = "conversation"
+	TaskDataKey                   = "task_data"
+	ConversationCreate   TaskType = "conversation_create"
+	ConversationContinue TaskType = "conversation_continue"
 )
 
 func NewTaskState() fsm.State {
@@ -24,10 +28,26 @@ func executeTask(ctx *fsm.Context) {
 		data, ok := d.(fsm.TaskData)
 		if ok {
 			switch data.Type {
-			case string(Conversation):
-				//TODO 进入对话任务，需要处理连续对话的情况，不是每次都要创建新的对话
+			case string(ConversationCreate):
 				conversationId := util.RandomIdWithPrefix("conversation")
 				action.EntryConversationTask(data.Payload.(string), conversationId, data.ID)
+			case string(ConversationContinue):
+				var payload schema.ConversationContinuePayload
+				if p, ok := data.Payload.(schema.ConversationContinuePayload); ok {
+					payload = p
+				} else {
+					bytes, err := json.Marshal(data.Payload)
+					if err != nil {
+						fmt.Println("Error marshaling payload:", err)
+						return
+					}
+					err = json.Unmarshal(bytes, &payload)
+					if err != nil {
+						fmt.Println("Error unmarshaling payload:", err)
+						return
+					}
+				}
+				action.EntryConversationTask(payload.Question, payload.ConversationId, data.ID)
 			}
 		}
 	}

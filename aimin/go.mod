@@ -9,8 +9,8 @@ require (
 )
 
 require (
-	github.com/Yoak3n/aimin/blood v0.0.0-20260115184206-3de94c103cc3 // indirect
-	github.com/Yoak3n/aimin/face v0.0.0-20260115184206-3de94c103cc3 // indirect
+	github.com/Yoak3n/aimin/blood v0.0.0-20260115184206-3de94c103cc3
+	github.com/Yoak3n/aimin/face v0.0.0-20260115184206-3de94c103cc3
 	github.com/Yoak3n/aimin/nerve v0.0.0-20260115184206-3de94c103cc3 // indirect
 	github.com/bytedance/sonic v1.14.0 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
