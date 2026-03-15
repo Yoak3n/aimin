@@ -219,46 +219,63 @@ func (c *CompositeState) OnEnter(ctx *Context) {
 		}
 	}
 	c.current = start
-	// 让selector来做
-	//if c.routerKey != "" && len(c.children) > 0 {
-	//	ctx.Data[c.routerKey] = c.children[c.current].ID()
-	//}
-	//if len(c.children) > 0 {
-	//	if c.children[c.current].CheckEntryCondition(ctx) {
-	//		c.children[c.current].OnEnter(ctx)
-	//	} else {
-	//		fmt.Printf("  [Composite] Selected child %s blocked by entry condition\n", c.children[c.current].Name())
-	//	}
-	//}
+	if len(c.children) > 0 {
+		child := c.children[c.current]
+		if ctx.OnStateChange != nil {
+			ctx.OnStateChange(child.Name())
+		}
+		if child.CheckEntryCondition(ctx) {
+			child.OnEnter(ctx)
+		}
+	}
 }
 
 func (c *CompositeState) OnUpdate(ctx *Context) string {
 	if c.current >= len(c.children) {
 		return Done
 	}
-	child := c.children[c.current]
-	//for idx, _ := range c.children {
-	//	if nextChild.CheckEntryCondition(ctx) {
-	//		child = nextChild
-	//		c.current = idx
-	//		break
-	//	}
-	//}
-	for idx := c.current; idx < len(c.children); idx++ {
-		nextChild := c.children[idx]
-		if nextChild.CheckEntryCondition(ctx) {
-			child = nextChild
-			c.current = idx
-			break
+
+	// 如果当前子状态不可进入，尝试寻找下一个可进入的
+	if !c.children[c.current].CheckEntryCondition(ctx) {
+		found := false
+		for idx := c.current + 1; idx < len(c.children); idx++ {
+			if c.children[idx].CheckEntryCondition(ctx) {
+				c.current = idx
+				found = true
+				break
+			}
 		}
+		if !found {
+			return Done
+		}
+		// 切换了子状态，触发通知和 OnEnter
+		child := c.children[c.current]
+		if ctx.OnStateChange != nil {
+			ctx.OnStateChange(child.Name())
+		}
+		child.OnEnter(ctx)
 	}
-	child.OnEnter(ctx)
+
+	child := c.children[c.current]
 	// 代理执行子状态
 	result := child.OnUpdate(ctx)
 	if result == Done {
 		child.OnExit(ctx)
 		if c.RouterKey != "" {
 			delete(ctx.Data, c.RouterKey)
+		}
+
+		// 尝试进入下一个子状态
+		c.current++
+		if c.current < len(c.children) {
+			nextChild := c.children[c.current]
+			if ctx.OnStateChange != nil {
+				ctx.OnStateChange(nextChild.Name())
+			}
+			if nextChild.CheckEntryCondition(ctx) {
+				nextChild.OnEnter(ctx)
+			}
+			return "" // 继续在复合状态运行
 		}
 		return Done
 	} else if result != "" {

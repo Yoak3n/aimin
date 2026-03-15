@@ -28,6 +28,7 @@ type WebSocketHub struct {
 	Tasks      chan schema.TaskData
 	Answer     chan string
 	AskChan    chan *QuestionRequest
+	State      chan string
 }
 
 type Client struct {
@@ -38,6 +39,7 @@ type Client struct {
 }
 
 var hub *WebSocketHub
+var once sync.Once
 
 func InitWebSocketHub() {
 	if hub != nil {
@@ -47,6 +49,9 @@ func InitWebSocketHub() {
 }
 
 func UseWebSocketHub() *WebSocketHub {
+	once.Do(func() {
+		hub = NewWebSocketHub()
+	})
 	return hub
 }
 
@@ -59,6 +64,7 @@ func NewWebSocketHub() *WebSocketHub {
 		Tasks:      make(chan schema.TaskData),
 		Answer:     make(chan string),
 		AskChan:    make(chan *QuestionRequest),
+		State:      make(chan string),
 	}
 }
 
@@ -122,6 +128,21 @@ func (wh *WebSocketHub) Run() {
 					pendingQuestions = pendingQuestions[1:]
 					wh.sendQuestion(currentQuestion)
 				}
+			}
+		case state := <-wh.State:
+			msg := WebsocketMessage{
+				Action: StateMessage,
+				Data:   state,
+			}
+			buf, _ := json.Marshal(msg)
+			for k, client := range wh.clients {
+				client.mu.Lock()
+				if err := client.conn.WriteMessage(websocket.TextMessage, buf); err != nil {
+					log.Println("Error broadcasting state to client:", err)
+					client.conn.Close()
+					delete(wh.clients, k)
+				}
+				client.mu.Unlock()
 			}
 		}
 	}

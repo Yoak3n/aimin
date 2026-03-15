@@ -17,6 +17,7 @@ const answerInput = ref('');
 const lastReply = ref<any>(null);
 const sidebarRef = ref<any>(null);
 const selectedConversationId = ref<string | null>(null);
+const currentFsmState = ref<string | null>(null);
 
 let socket: WebSocket | null = null;
 const clientId = `web-client-${Math.floor(Math.random() * 1000)}`;
@@ -56,6 +57,8 @@ const connectWebSocket = () => {
             time: new Date().toLocaleTimeString(),
             content: `Received Reply: ${msg.data.content}`
         });
+      } else if (msg.action === 'State') {
+        currentFsmState.value = msg.data;
       }
     } catch (e) {
       console.error('Error parsing message:', e);
@@ -162,7 +165,7 @@ onUnmounted(() => {
           {{ isConnected ? 'Connected' : 'Disconnected' }}
         </span>
       </div>
-      <Status />
+      <Status :realtimeState="currentFsmState" />
       <div class="logs-container">
         <h3>Logs</h3>
         <Logs :logs="logs" />

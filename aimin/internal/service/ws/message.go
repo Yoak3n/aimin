@@ -19,6 +19,7 @@ const (
 	AskMessage       ActionType = "Ask"
 	AnswerMessage    ActionType = "Answer"
 	ReplyMessage     ActionType = "Reply"
+	StateMessage     ActionType = "State"
 )
 
 type LogMessageData struct {

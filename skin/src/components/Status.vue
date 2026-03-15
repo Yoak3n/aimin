@@ -1,6 +1,9 @@
 <template>
   <div class="status-container">
-    <h3>System Status</h3>
+    <div class="header">
+      <h3>System Status</h3>
+      <div v-if="realtimeState" class="state-badge">{{ realtimeState }}</div>
+    </div>
     <button @click="fetchStatus" :disabled="loading">
       {{ loading ? 'Loading...' : 'Refresh Status' }}
     </button>
@@ -11,6 +14,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+
+const props = defineProps<{
+  realtimeState?: string | null
+}>();
 
 const status = ref<string | null>(null);
 const loading = ref(false);
@@ -46,6 +53,20 @@ onMounted(() => {
   border-radius: 8px;
   background-color: #343541;
   color: white;
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.state-badge {
+  background-color: #10a37f;
+  color: white;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: bold;
 }
 .status-display {
   background: #202123;

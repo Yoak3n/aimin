@@ -40,8 +40,9 @@ type State interface {
 
 // Context 运行上下文，用于传递数据
 type Context struct {
-	Data    map[string]interface{}
-	Current string
+	Data          map[string]interface{}
+	Current       string
+	OnStateChange func(string)
 }
 
 func NewContext() *Context {
@@ -65,6 +66,16 @@ type FSM struct {
 	ctx *Context
 
 	isRunning bool
+
+	OnStateChange func(string)
+	lastStateName string
+}
+
+func (f *FSM) broadcastState(name string) {
+	if f.OnStateChange != nil && name != f.lastStateName {
+		f.lastStateName = name
+		f.OnStateChange(name)
+	}
 }
 
 func NewFSM() *FSM {
@@ -104,8 +115,13 @@ func (f *FSM) Start(initialStateID string) {
 		panic(fmt.Sprintf("Initial state %s entry condition failed", initialStateID))
 	}
 
+	if f.OnStateChange != nil {
+		f.ctx.OnStateChange = f.broadcastState
+	}
+
 	f.currentState = startState
 	f.isRunning = true
+	f.broadcastState(f.currentState.Name())
 	f.currentState.OnEnter(f.ctx)
 }
 
@@ -165,6 +181,7 @@ func (f *FSM) interrupt(nextTask State) {
 
 	// 切换到任务状态
 	f.currentState = nextTask
+	f.broadcastState(f.currentState.Name())
 	// 任务状态不需要注册在map里也能运行，但最好还是注册。这里假设Task也是独立的实例。
 	f.currentState.OnEnter(f.ctx)
 }
@@ -180,6 +197,7 @@ func (f *FSM) handleStateDone() {
 		f.taskQueue = f.taskQueue[1:]
 		fmt.Printf("[FSM] Starting next task from queue: %s\n", nextTask.Name())
 		f.currentState = nextTask
+		f.broadcastState(f.currentState.Name())
 		f.currentState.OnEnter(f.ctx)
 		return
 	}
@@ -193,6 +211,7 @@ func (f *FSM) handleStateDone() {
 
 		fmt.Printf("[FSM] Resuming state: %s\n", prevState.Name())
 		f.currentState = prevState
+		f.broadcastState(f.currentState.Name())
 		// 恢复状态，调用 OnResume 而不是 OnEnter
 		f.currentState.OnResume(f.ctx)
 		return
@@ -219,6 +238,7 @@ func (f *FSM) changeState(nextStateID string) {
 	fmt.Printf("[FSM] Transition: %s -> %s\n", f.currentState.Name(), nextState.Name())
 	f.currentState.OnExit(f.ctx)
 	f.currentState = nextState
+	f.broadcastState(f.currentState.Name())
 	f.currentState.OnEnter(f.ctx)
 }
 
@@ -244,6 +264,7 @@ func (f *FSM) returnToInitial() {
 	}
 	fmt.Printf("[FSM] Returning to initial state: %s\n", nextState.Name())
 	f.currentState = nextState
+	f.broadcastState(f.currentState.Name())
 	f.isRunning = true
 	f.currentState.OnEnter(f.ctx)
 }
@@ -255,7 +276,17 @@ func (f *FSM) CloseFSM() {
 }
 
 func (f *FSM) CurrentStatus() string {
+	if f.currentState == nil {
+		return ""
+	}
 	return f.currentState.Name()
+}
+
+func (f *FSM) SetOnStateChange(cb func(string)) {
+	f.OnStateChange = cb
+	if f.ctx != nil {
+		f.ctx.OnStateChange = f.broadcastState
+	}
 }
 
 func (f *FSM) UpdateContext(key string, value any) {
