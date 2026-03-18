@@ -32,7 +32,7 @@ func (b *BaseState) CheckEntryCondition(ctx *Context) bool {
 	return true
 }
 func (b *BaseState) OnEnter(ctx *Context) {
-	// fmt.Printf("  -> Enter %s\n", b.name)
+	fmt.Printf("  -> Enter %s\n", b.name)
 }
 func (b *BaseState) OnExit(ctx *Context) {
 	// fmt.Printf("  <- Exit %s\n", b.name)
@@ -226,6 +226,9 @@ func (c *CompositeState) OnEnter(ctx *Context) {
 		}
 		if child.CheckEntryCondition(ctx) {
 			child.OnEnter(ctx)
+		} else {
+			//child = c.children[0]
+			// 应该会直接返回根节点
 		}
 	}
 }

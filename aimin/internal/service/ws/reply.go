@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"log"
 
+	"github.com/Yoak3n/aimin/blood/schema/ws"
 	"github.com/gorilla/websocket"
 )
 
 func (wh *WebSocketHub) SendReply(id string, content string) {
-	msg := WebsocketMessage{
-		Action: ReplyMessage,
+	msg := ws.WebsocketMessage{
+		Action: ws.ReplyMessage,
 		Data: map[string]string{
 			"conversation_id": id,
 			"content":         content,

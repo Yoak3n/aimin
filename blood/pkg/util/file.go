@@ -46,3 +46,17 @@ func GetFileDir(filePath string) string {
 	}
 	return filePath[strings.LastIndex(filePath, "/")+1:]
 }
+
+func GetFilesInDir(dir string) ([]string, error) {
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var fileList []string
+	for _, file := range files {
+		if !file.IsDir() {
+			fileList = append(fileList, path.Join(dir, file.Name()))
+		}
+	}
+	return fileList, nil
+}

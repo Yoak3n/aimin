@@ -10,6 +10,7 @@ import (
 
 	"github.com/Yoak3n/aimin/aimin/cmd/app/componet"
 	"github.com/Yoak3n/aimin/blood/schema"
+	"github.com/Yoak3n/aimin/blood/schema/ws"
 	"github.com/Yoak3n/aimin/dna/fsm"
 	"github.com/gorilla/websocket"
 )
@@ -89,9 +90,9 @@ func (wh *WebSocketHub) Run() {
 
 		case id := <-wh.unregister:
 			if client, ok := wh.clients[id]; ok {
-				cl := WebsocketMessage{
-					Action: CloseMessage,
-					Data:   CloseMessage,
+				cl := ws.WebsocketMessage{
+					Action: ws.CloseMessage,
+					Data:   ws.CloseMessage,
 				}
 				client.mu.Lock()
 				client.conn.WriteJSON(cl)
@@ -130,8 +131,8 @@ func (wh *WebSocketHub) Run() {
 				}
 			}
 		case state := <-wh.State:
-			msg := WebsocketMessage{
-				Action: StateMessage,
+			msg := ws.WebsocketMessage{
+				Action: ws.StateMessage,
 				Data:   state,
 			}
 			buf, _ := json.Marshal(msg)
@@ -149,8 +150,8 @@ func (wh *WebSocketHub) Run() {
 }
 
 func (wh *WebSocketHub) sendQuestion(req *QuestionRequest) {
-	msg := WebsocketMessage{
-		Action: AskMessage,
+	msg := ws.WebsocketMessage{
+		Action: ws.AskMessage,
 		Data:   req.Content,
 	}
 	buf, _ := json.Marshal(msg)
@@ -165,8 +166,8 @@ func (wh *WebSocketHub) sendQuestion(req *QuestionRequest) {
 }
 
 func (wh *WebSocketHub) sendQuestionToClient(req *QuestionRequest, client *Client) {
-	msg := WebsocketMessage{
-		Action: AskMessage,
+	msg := ws.WebsocketMessage{
+		Action: ws.AskMessage,
 		Data:   req.Content,
 	}
 	buf, _ := json.Marshal(msg)
@@ -201,14 +202,12 @@ func (wh *WebSocketHub) healthCheck(client *Client) {
 		last := client.last
 		now := time.Now().Unix()
 		if (now - last) >= 180 {
-			log.Println("check failed")
 			wh.unregister <- client.id
 			return
 		}
-		log.Println("check successfully")
-		pingMessage := WebsocketMessage{
-			Action: PingMessage,
-			Data:   PingMessage,
+		pingMessage := ws.WebsocketMessage{
+			Action: ws.PingMessage,
+			Data:   ws.PingMessage,
 		}
 		client.conn.WriteJSON(pingMessage)
 		client.mu.RUnlock()
@@ -225,21 +224,21 @@ func (wh *WebSocketHub) listen(id string, conn *websocket.Conn) {
 		if err != nil || t == -1 {
 			break
 		}
-		messageData := &WebsocketMessage{}
+		messageData := &ws.WebsocketMessage{}
 		err = json.Unmarshal(msg, messageData)
 		if err != nil {
 			break
 		}
 		switch messageData.Action {
-		case CloseMessage:
+		case ws.CloseMessage:
 			return
-		case PingMessage:
-			pongMessage := WebsocketMessage{
-				Action: PongMessage,
-				Data:   PongMessage,
+		case ws.PingMessage:
+			pongMessage := ws.WebsocketMessage{
+				Action: ws.PongMessage,
+				Data:   ws.PongMessage,
 			}
 			conn.WriteJSON(pongMessage)
-		case AddTaskMessage:
+		case ws.AddTaskMessage:
 			// 无法直接断言为任务数据
 			buf, _ := json.Marshal(messageData.Data)
 			taskData := schema.TaskData{}
@@ -248,7 +247,7 @@ func (wh *WebSocketHub) listen(id string, conn *websocket.Conn) {
 				log.Println("task data unmarshal err:", err)
 			}
 			wh.Tasks <- taskData
-		case AnswerMessage:
+		case ws.AnswerMessage:
 			if ans, ok := messageData.Data.(string); ok {
 				wh.Answer <- ans
 			} else {
@@ -282,7 +281,7 @@ func (wh *WebSocketHub) sendTask() {
 }
 
 func sendLog(conn *websocket.Conn, content string) {
-	logItem := NewLogMessage(content)
+	logItem := ws.NewLogMessage(content)
 	conn.WriteJSON(logItem)
 }
 
@@ -291,7 +290,7 @@ func (wh *WebSocketHub) Broadcast(message []byte) {
 }
 
 func (wh *WebSocketHub) BroadcastLog(content string) {
-	logItem := NewLogMessage(content)
+	logItem := ws.NewLogMessage(content)
 	buf, _ := json.Marshal(logItem)
 	wh.Broadcast(buf)
 }

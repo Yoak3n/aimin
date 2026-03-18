@@ -161,7 +161,7 @@ func (m *Manager) executeConversation(data Input) {
 					continue
 				}
 				openAIMessages = append(openAIMessages, schema.OpenAIMessage{
-					Role:    record.Role,
+					Role:    schema.OpenAIMessageRole(record.Role),
 					Content: record.Content,
 				})
 			}

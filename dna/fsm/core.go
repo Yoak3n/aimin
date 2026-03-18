@@ -2,6 +2,8 @@ package fsm
 
 import (
 	"fmt"
+
+	"github.com/Yoak3n/aimin/dna/attribute"
 )
 
 // StateType 定义状态类型
@@ -43,12 +45,14 @@ type Context struct {
 	Data          map[string]interface{}
 	Current       string
 	OnStateChange func(string)
+	Attr          *attribute.MinAttribute
 }
 
 func NewContext() *Context {
 	return &Context{
 		Data:    make(map[string]interface{}),
 		Current: "",
+		Attr:    attribute.NewMinAttribute(),
 	}
 }
 

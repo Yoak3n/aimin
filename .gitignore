@@ -1,5 +1,8 @@
 .idea/
 data/
+test/
 *.exe
+*.txt
+*.log
 .env*
 config.json

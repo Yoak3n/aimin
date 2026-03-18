@@ -15,7 +15,7 @@ func CreateDialogueWithConversation(message schema.OpenAIMessage, id ...string) 
 	}
 	dialogue := schema.DialogueRecord{
 		Id:             util.RandomIdWithPrefix("dialogue-"),
-		Role:           message.Role,
+		Role:           string(message.Role),
 		Content:        message.Content,
 		ConversationId: conversationId,
 	}

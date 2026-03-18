@@ -4,13 +4,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Yoak3n/aimin/dna/attribute"
 	"github.com/Yoak3n/aimin/dna/decision"
 	"github.com/Yoak3n/aimin/dna/fsm"
 )
 
 type Component struct {
-	fsm *fsm.FSM
-	log chan string
+	fsm  *fsm.FSM
+	attr *attribute.MinAttribute
+	log  chan string
 }
 
 var component *Component
@@ -43,4 +45,3 @@ func (c *Component) AddTask(data fsm.TaskData) {
 	c.fsm.UpdateContext(decision.TaskDataKey, data)
 	c.fsm.AddTask(task)
 }
-

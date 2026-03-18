@@ -12,7 +12,7 @@ func FetchMemoryStrategy(messages []schema.OpenAIMessage) string {
 
 	formatMessage := ""
 	for _, m := range messages {
-		formatMessage += m.Role + ": "
+		formatMessage += string(m.Role) + ": "
 		formatMessage += m.Content + "\n---\n"
 	}
 	systemPrompt := `现在你是一个智能助手，你需要根据用户的问题，判断用户的问题是否需要长期记忆。

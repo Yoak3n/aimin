@@ -45,7 +45,7 @@ func (b *BaseAdapter) Chat(userMessages []schema.OpenAIMessage, systemMessage ..
 	})
 	for _, msg := range userMessages {
 		messages = append(messages, map[string]string{
-			"role":    msg.Role,
+			"role":    string(msg.Role),
 			"content": msg.Content,
 		})
 	}

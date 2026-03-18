@@ -23,7 +23,7 @@ func AddMemory(messages []schema.DialogueRecord) error {
 	resources := make([]schema.OpenAIMessage, 0, len(messages))
 	for _, message := range messages {
 		resources = append(resources, schema.OpenAIMessage{
-			Role:    message.Role,
+			Role:    schema.OpenAIMessageRole(message.Role),
 			Content: message.Content,
 		})
 		ids = append(ids, message.Id)

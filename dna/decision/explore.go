@@ -75,6 +75,7 @@ func makeExploreNode(t string) fsm.WorkAction {
 	question := ""
 	answer := make([]string, 0)
 	return func(ctx *fsm.Context) string {
+		ctx.Attr.SetEnergy(ctx.Attr.Energy - 2)
 		ctx.Data[ExploreChoice] = ""
 		for i := progress; i < 4; i++ {
 			switch i {
@@ -96,6 +97,7 @@ func makeExploreNode(t string) fsm.WorkAction {
 func askForAnswer(question string) []string {
 	choice := rand.IntN(3)
 	if choice >= 2 {
+		logger.Logger.Println("主动提问")
 		return action.ProactiveAsk(question)
 	}
 	// 网络搜索或主动提问
