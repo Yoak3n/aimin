@@ -5,13 +5,14 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Yoak3n/aimin/blood/agent/mcp/tool"
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
 )
 
 type McpHUB struct {
 	tools map[string]*Tool
-	Ctx   *Context
+	Ctx   *tool.Context
 }
 
 var (
@@ -29,7 +30,7 @@ func GlobalMcpHUB() *McpHUB {
 func NewMcpHUB() *McpHUB {
 	return &McpHUB{
 		tools: make(map[string]*Tool),
-		Ctx:   NewMcpContext(),
+		Ctx:   tool.NewMcpContext(),
 	}
 }
 

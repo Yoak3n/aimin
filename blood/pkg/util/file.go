@@ -60,3 +60,25 @@ func GetFilesInDir(dir string) ([]string, error) {
 	}
 	return fileList, nil
 }
+
+func FileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func CopyFile(srcPath, dstPath string) error {
+	data, err := os.ReadFile(srcPath)
+	if err != nil {
+		return err
+	}
+	_, err = os.Stat(dstPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = os.WriteFile(dstPath, data, 0644)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}

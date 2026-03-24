@@ -192,7 +192,7 @@ func (f *FSM) interrupt(nextTask State) {
 
 // handleStateDone 处理状态完成的情况
 func (f *FSM) handleStateDone() {
-	fmt.Printf("[FSM] State %s Finished.\n", f.currentState.Name())
+	// fmt.Printf("[FSM] State %s Finished.\n", f.currentState.Name())
 	f.currentState.OnExit(f.ctx)
 
 	// 1. 优先检查任务队列 (Task Queue) - 连续执行任务

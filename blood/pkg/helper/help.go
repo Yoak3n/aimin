@@ -1,8 +1,6 @@
 package helper
 
 import (
-	"encoding/json"
-	"os"
 	"sync"
 
 	"github.com/Yoak3n/aimin/blood/adapter"
@@ -16,16 +14,8 @@ var hub *adapter.LLMAdapterHub
 
 func UseLLM() *adapter.LLMAdapterHub {
 	once.Do(func() {
-		buf, err := os.ReadFile("config.json")
-		if err != nil {
-			panic(err)
-		}
-		var conf config.Configuration
-		if err = json.Unmarshal(buf, &conf); err != nil {
-			panic(err)
-		}
 		hub = adapter.NewLLMAdapterHub()
-		for _, llm := range conf.LLMs {
+		for _, llm := range config.GlobalConfiguration().LLMs {
 			hub.RegisterAdapter(&llm)
 		}
 	})

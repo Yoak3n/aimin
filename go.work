@@ -6,4 +6,5 @@ use (
 	./nerve
 	./face
 	./aimin
+	./test
 )

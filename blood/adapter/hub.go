@@ -77,10 +77,37 @@ func (h *LLMAdapterHub) selectByLoadBalance(candidates []string) string {
 	return candidates[0]
 }
 
-func (h *LLMAdapterHub) getAdapterByType(llmType config.LLMType) (LLMAdapter, error) {
+func (h *LLMAdapterHub) getAdapterByKey(key string, llmType config.LLMType) (LLMAdapter, error) {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 
+	for _, adapter := range h.Adapters {
+		if adapter.GetConfig().Model == key {
+			return adapter, nil
+		}
+	}
+	return h.getAdapterByType(llmType)
+}
+
+func (h *LLMAdapterHub) getAdapterByType(llmType config.LLMType, activeKey ...string) (LLMAdapter, error) {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+
+	spec := ""
+	if len(activeKey) > 0 {
+		spec = activeKey[0]
+	}
+
+	switch llmType {
+	case config.LLMTypeChat:
+		if spec != "" {
+			return h.getAdapterByKey(spec, llmType)
+		}
+	case config.LLMTypeEmbedding:
+		if spec != "" {
+			return h.getAdapterByKey(spec, llmType)
+		}
+	}
 	var candidates []string
 	for key, adapter := range h.Adapters {
 		if config.LLMType(adapter.GetConfig().Type) == llmType {
@@ -98,15 +125,28 @@ func (h *LLMAdapterHub) getAdapterByType(llmType config.LLMType) (LLMAdapter, er
 }
 
 func (h *LLMAdapterHub) Chat(userMessages []schema.OpenAIMessage, systemPrompt string) (string, error) {
-	adapter, err := h.getAdapterByType(config.LLMTypeChat)
+	adapter, err := h.getAdapterByType(config.LLMTypeChat, config.GlobalConfiguration().ActiveLLM.ChatModel)
 	if err != nil {
 		return "", err
 	}
 	return adapter.Chat(userMessages, systemPrompt)
 }
 
+func (h *LLMAdapterHub) ChatStream(userMessages []schema.OpenAIMessage, onDelta func(string) error, systemPrompt ...string) (string, error) {
+	adapter, err := h.getAdapterByType(config.LLMTypeChat, config.GlobalConfiguration().ActiveLLM.ChatModel)
+	if err != nil {
+		return "", err
+	}
+	sp := ""
+	if len(systemPrompt) > 0 {
+		// TODO 这里应该有一个默认的系统提示词
+		sp = systemPrompt[0]
+	}
+	return adapter.ChatStream(userMessages, onDelta, sp)
+}
+
 func (h *LLMAdapterHub) Embedding(text []string) ([][]float32, error) {
-	adapter, err := h.getAdapterByType(config.LLMTypeEmbedding)
+	adapter, err := h.getAdapterByType(config.LLMTypeEmbedding, config.GlobalConfiguration().ActiveLLM.EmbeddingModel)
 	if err != nil {
 		return nil, err
 	}

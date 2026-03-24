@@ -1,7 +1,5 @@
 package action
 
-import "fmt"
-
 const ReActPrompt = "你需要解决一个任务。" +
 	"为此，你需要将任务分解为多个步骤。对于每个步骤，首先使用<thought>标签来思考这个步骤需要做什么。" +
 	"然后使用<action>标签调用一个工具，工具的执行结果会通过<observation>标签返回。" +
@@ -14,7 +12,8 @@ const ReActPrompt = "你需要解决一个任务。" +
 	"<final_answer>任务的最终答案</final_answer>"
 
 func genCompletedPrompt(task string) string {
-	return fmt.Sprintf(ReActPrompt, task)
+	_ = task
+	return ReActPrompt
 }
 
 func getMcpTool() string {

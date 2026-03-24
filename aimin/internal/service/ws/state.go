@@ -1,8 +1,6 @@
 package ws
 
-import (
-	"log"
-)
+import "log"
 
 func (wh *WebSocketHub) BroadcastState(state string) {
 	select {

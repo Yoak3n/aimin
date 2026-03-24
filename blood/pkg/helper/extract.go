@@ -3,6 +3,7 @@ package helper
 import (
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 func ExtractContentByTag(text, tagName string) string {
@@ -58,4 +59,31 @@ func ParseFunctionCall(text string) (functionName string, args string, err error
 	err = nil
 
 	return
+}
+
+func StripFrontMatter(content string) string {
+	content = strings.TrimSpace(content)
+	if !strings.HasPrefix(content, "---") {
+		return content
+	}
+
+	// 查找第二个 "---"
+	lines := strings.Split(content, "\n")
+	if len(lines) < 2 {
+		return content
+	}
+
+	endIdx := -1
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "---" {
+			endIdx = i
+			break
+		}
+	}
+
+	if endIdx != -1 && endIdx < len(lines)-1 {
+		return strings.TrimSpace(strings.Join(lines[endIdx+1:], "\n"))
+	}
+
+	return content
 }

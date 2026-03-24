@@ -219,18 +219,16 @@ func (c *CompositeState) OnEnter(ctx *Context) {
 		}
 	}
 	c.current = start
-	if len(c.children) > 0 {
-		child := c.children[c.current]
-		if ctx.OnStateChange != nil {
-			ctx.OnStateChange(child.Name())
-		}
-		if child.CheckEntryCondition(ctx) {
-			child.OnEnter(ctx)
-		} else {
-			//child = c.children[0]
-			// 应该会直接返回根节点
-		}
-	}
+	// if len(c.children) > 0 {
+	// 	child := c.children[c.current]
+	// 	if ctx.OnStateChange != nil {
+	// 		ctx.OnStateChange(child.Name())
+	// 	}
+	// 	// else {
+	// 	// 	//child = c.children[0]
+	// 	// 	// 应该会直接返回根节点
+	// 	// }
+	// }
 }
 
 func (c *CompositeState) OnUpdate(ctx *Context) string {
@@ -239,7 +237,13 @@ func (c *CompositeState) OnUpdate(ctx *Context) string {
 	}
 
 	// 如果当前子状态不可进入，尝试寻找下一个可进入的
-	if !c.children[c.current].CheckEntryCondition(ctx) {
+	if child := c.children[c.current]; child.CheckEntryCondition(ctx) {
+		// 切换了子状态，触发通知和 OnEnter
+		if ctx.OnStateChange != nil {
+			ctx.OnStateChange(child.Name())
+		}
+		child.OnEnter(ctx)
+	} else {
 		found := false
 		for idx := c.current + 1; idx < len(c.children); idx++ {
 			if c.children[idx].CheckEntryCondition(ctx) {

@@ -13,7 +13,7 @@ func NewIdleNode() *fsm.CompositeState {
 		NewIntrospectionNode(),
 	}
 	check := func(ctx *fsm.Context) bool {
-		v, ok := ctx.Data[Root]
+		v, ok := ctx.Data[rootRouterKey]
 		return ok && v == Idle
 	}
 	selection := func(ctx *fsm.Context, states []fsm.State) int {
