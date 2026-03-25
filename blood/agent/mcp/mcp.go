@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -61,5 +62,9 @@ func (m *McpHUB) Execute(action string) (string, error) {
 	}
 	m.Ctx.SetPayload(payload)
 	// TODO 是否需要请求权限
-	return tool.Action(m.Ctx), nil
+	res := tool.Action(m.Ctx)
+	if after, ok0 :=strings.CutPrefix(res, "ERROR:"); ok0  {
+		return res, errors.New(strings.TrimSpace(after))
+	}
+	return res, nil
 }

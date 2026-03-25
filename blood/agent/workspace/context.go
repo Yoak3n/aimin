@@ -3,12 +3,16 @@ package workspace
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/Yoak3n/aimin/blood/agent/mcp"
 	"github.com/Yoak3n/aimin/blood/agent/skill"
+	"github.com/Yoak3n/aimin/blood/config"
+	"github.com/Yoak3n/aimin/blood/pkg/helper"
+	"github.com/Yoak3n/aimin/blood/pkg/util"
 )
 
 const DefaultPromptTmpl = `# 角色定义和基本原则
@@ -42,17 +46,18 @@ const DefaultPromptTmpl = `# 角色定义和基本原则
 
 ## 技能系统
 - 当任务需要特定领域能力时，优先查看“技能列表”并选择最相关的技能
-- 若恰好一个技能明显适用：使用 use_skill(name="...") 激活它，然后严格遵循该技能的Instructions
-- 若当前技能不再相关，后续步骤应回到通用执行（必要时重新选择技能）
+- 若恰好一个技能明显适用：使用 use_skill(skill_name) 激活它，然后严格遵循该技能的Instructions
+- 若当前技能不再相关，后续步骤应回到通用执行（必要时重新选择技能,使用use_skill("...")来表示不再需要使用技能）
 技能列表（动态注入）：
 {skills_description}
 
 ## 配置与工作区
-- 配置文件通常为 config.json（可用 file_operation 读取或修改）
-- 工作区根目录列表（用于注入上下文文件与技能）：
+配置文件通常为 config.json（可用 file_operation 读取或修改）
+
+### 工作区根目录列表（用于注入上下文文件与技能）：
 {workspace_roots}
 
-## 工作空间文件（已注入）
+### 工作空间文件（已注入）
 以下上下文文件可能已被注入（内容可能被截断）：
 {workspace_context}
 
@@ -66,8 +71,8 @@ const DefaultPromptTmpl = `# 角色定义和基本原则
 ## 运行时信息
 - LocalTime: {local_time}
 - OS: {os_info}
-- CWD: {cwd}
-- Files: {cwd_files}
+- 当前所在目录: {cwd}
+- 所在目录文件: {cwd_files}
 
 示例：
 <thought>需要查看配置文件。</thought>
@@ -83,8 +88,11 @@ func NewWorkspaceContext() *WorkspaceContext {
 	}
 }
 
-func (wc *WorkspaceContext) String() string {
-	wc.BuildEnvInfo().BuildToolInfo().BuildSkillInfo()
+func (wc *WorkspaceContext) String(choose ...ContextChoice) string {
+	if len(choose) == 0 {
+		choose = append(choose, Normal)
+	}
+	wc.BuildEnvInfo().BuildToolInfo().BuildSkillInfo().BuildWorkspaceRoots().BuildWorkspaceContext(choose[0])
 	return wc.prompt
 }
 
@@ -98,10 +106,15 @@ func (wc *WorkspaceContext) BuildEnvInfo() *WorkspaceContext {
 		cwdFiles = fmt.Sprintf("Error reading current directory: %s\n", err)
 	}
 	for _, fp := range dirFp {
-		cwdFiles += fmt.Sprintf("%s\n", fp.Name())
+		if fp.IsDir() {
+			cwdFiles += fmt.Sprintf("%s/\n", fp.Name())
+		} else {
+			cwdFiles += fmt.Sprintf("%s\n", fp.Name())
+		}
 	}
+	cwdFiles = fmt.Sprintf("<cwd_files>%s</cwd_files>", cwdFiles)
 	out := strings.Replace(wc.prompt, "{local_time}", localTime, 1)
-	out = strings.Replace(out, "{osInfo}", osInfo, 1)
+	out = strings.Replace(out, "{os_info}", osInfo, 1)
 	out = strings.Replace(out, "{cwd}", cwd, 1)
 	out = strings.Replace(out, "{cwd_files}", cwdFiles, 1)
 	wc.prompt = out
@@ -115,7 +128,7 @@ func (wc *WorkspaceContext) BuildToolInfo() *WorkspaceContext {
 	}
 	var toolsDesc strings.Builder
 	prefix := `## 工具可用性
-你可以使用的工具如下（名称、说明、参数schema）：`
+你可以使用的工具如下（名称、说明、参数schema）：\n`
 	for _, tool := range tools {
 		fmt.Fprintf(&toolsDesc, "%s\n", tool.String())
 	}
@@ -127,6 +140,7 @@ func (wc *WorkspaceContext) BuildToolInfo() *WorkspaceContext {
 func (wc *WorkspaceContext) BuildSkillInfo() *WorkspaceContext {
 	skills := skill.GlobalSkillHUB().Skills
 	if len(skills) == 0 {
+		wc.prompt = strings.Replace(wc.prompt, "{skills_description}", "", 1)
 		return wc
 	}
 	prefix := `## 技能可用性
@@ -161,5 +175,102 @@ func (wc *WorkspaceContext) BuildSkillInfo() *WorkspaceContext {
 		wc.prompt = wc.prompt[:startIdx] + "\n" + replaceStr + "\n" + wc.prompt[endIdx:]
 	}
 
+	return wc
+}
+
+func (wc *WorkspaceContext) BuildWorkspaceRoots() *WorkspaceContext {
+	workspaceRoots := config.GlobalConfiguration().Workspace.Path
+
+	var sb strings.Builder
+	sb.WriteString("工作空间路径：" + workspaceRoots + "\n")
+	dir, err := os.ReadDir(workspaceRoots)
+	if err != nil {
+		fmt.Fprintf(&sb, "Error reading workspace directory: %s\n", err)
+	}
+	sb.WriteString("工作空间文件列表：\n")
+	for _, d := range dir {
+		if d.IsDir() {
+			fmt.Fprintf(&sb, "- %s/\n", d.Name())
+		} else {
+			fmt.Fprintf(&sb, "- %s\n", d.Name())
+		}
+	}
+
+	if strings.Contains(wc.prompt, "{workspace_roots}") {
+		replaceStr := sb.String()
+		out := strings.Replace(wc.prompt, "{workspace_roots}", replaceStr, 1)
+		wc.prompt = out
+	} else {
+		startStr := "### 工作区根目录列表（用于注入上下文文件与技能）："
+		idx := strings.Index(wc.prompt, startStr)
+		endIdx := strings.Index(wc.prompt, "### 工作空间文件内容（已注入）")
+		if idx == -1 || endIdx == -1 {
+			return wc
+		}
+		startIdx := idx + len(startStr)
+		if startIdx > endIdx {
+			return wc
+		}
+		wc.prompt = wc.prompt[:startIdx] + "\n" + sb.String() + "\n" + wc.prompt[endIdx:]
+	}
+	return wc
+}
+
+func (wc *WorkspaceContext) BuildWorkspaceContext(plan ...ContextChoice) *WorkspaceContext {
+	path := config.GlobalConfiguration().Workspace.Path
+	contextSize := config.GlobalConfiguration().Workspace.ContextSize
+	fileContentSize := config.GlobalConfiguration().Workspace.FileContentSize
+	workspaceContext := ""
+	if len(plan) == 0 {
+		plan = append(plan, Normal)
+	}
+	files := makeFileSpecMap(plan[0])
+	for _, spec := range files {
+		if spec.Required {
+			absPath := filepath.Join(path, spec.RelPath)
+			if !util.FileExists(absPath) {
+				workspaceContext = util.PushLimited(workspaceContext, "\n"+spec.Name+" not exists", int(contextSize))
+				continue
+			}
+
+			buf, err := os.ReadFile(absPath)
+			if err != nil || len(buf) == 0 {
+				// 如果不是错误导致的空文件，就不打印错误
+				if err != nil {
+					fmt.Println("read file failed:", absPath, err)
+				}
+				continue
+			}
+
+			content := helper.StripFrontMatter(string(buf))
+			if content == "" {
+				continue
+			}
+			content = util.TruncateChars(content, int(fileContentSize))
+
+			ol := len(workspaceContext)
+			workspaceContext = util.PushLimited(workspaceContext, fmt.Sprintf("\n<workspace_file name=\"%s\">\n%s</workspace_file>", spec.Name, content), int(contextSize))
+			if len(workspaceContext) == ol {
+				return wc
+			}
+		}
+	}
+	if strings.Contains(wc.prompt, "{workspace_context}") {
+		replaceStr := workspaceContext
+		out := strings.Replace(wc.prompt, "{workspace_context}", replaceStr, 1)
+		wc.prompt = out
+	} else {
+		startStr := "### 工作空间文件内容（已注入）"
+		idx := strings.Index(wc.prompt, startStr)
+		endIdx := strings.Index(wc.prompt, "### 心跳检查")
+		if idx == -1 || endIdx == -1 {
+			return wc
+		}
+		startIdx := idx + len(startStr)
+		if startIdx > endIdx {
+			return wc
+		}
+		wc.prompt = wc.prompt[:startIdx] + "\n" + workspaceContext + "\n" + wc.prompt[endIdx:]
+	}
 	return wc
 }

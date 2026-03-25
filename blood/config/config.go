@@ -43,3 +43,11 @@ func GlobalConfiguration() *Configuration {
 	})
 	return conf
 }
+
+func (c *Configuration) Save() error {
+	data, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile("config.json", data, 0644)
+}

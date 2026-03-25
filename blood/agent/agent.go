@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/Yoak3n/aimin/blood/agent/mcp"
@@ -11,6 +13,11 @@ import (
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/blood/schema"
 )
+
+type RunResult struct {
+	Thought     string
+	FinalAnswer string
+}
 
 type Agent struct {
 	Mcp   *mcp.McpHUB
@@ -29,7 +36,10 @@ func NewAgent() *Agent {
 	a.RegisterTool(mcp.GlobTool())
 	a.RegisterTool(mcp.GrepTool())
 	a.RegisterTool(mcp.SkillTool())
-	workspace.EnsureWorkspace()
+	if workspace.EnsureWorkspace() {
+		fmt.Println("第一次运行，初始化工作空间")
+
+	}
 	return a
 }
 
@@ -76,23 +86,17 @@ func (a *Agent) RegisterLLMResponseHandler(h func(string)) {
 	a.ensureHooks().AddLLMResponseHandler(h)
 }
 
-func (a *Agent) Run(input string) {
+func (a *Agent) RunWithMessages(messages []schema.OpenAIMessage) (RunResult, error) {
 	hooks := a.ensureHooks()
 	noHooks := hooks.IsEmpty()
-	if input == "" {
-		fmt.Println("输入为空")
-		return
+	if len(messages) == 0 {
+		return RunResult{}, errors.New("messages 不能为空")
 	}
-	messages := []schema.OpenAIMessage{
-		{
-			Role:    schema.OpenAIMessageRoleUser,
-			Content: fmt.Sprintf("<question>%s</question>", input),
-		},
-	}
-	// sp := a.RenderSysytemPrompt()
 	wc := workspace.NewWorkspaceContext()
+	thoughts := make([]string, 0, 8)
 	for {
 		sp := wc.String()
+		_ = os.WriteFile("sp.md", []byte(sp), 0644)
 		var onDelta func(string) error
 		if len(hooks.AssistantDeltaHandlers) > 0 {
 			onDelta = hooks.EmitAssistantDelta
@@ -100,7 +104,7 @@ func (a *Agent) Run(input string) {
 		res, err := helper.UseLLM().ChatStream(messages, onDelta, sp)
 		if err != nil {
 			logger.Logger.Error("LLM调用失败", err)
-			break
+			return RunResult{}, err
 		}
 		if len(hooks.LLMResponseHandlers) > 0 {
 			hooks.EmitLLMResponse(res)
@@ -113,6 +117,7 @@ func (a *Agent) Run(input string) {
 		// 检测thought标签并提取thought内容
 		thoughtContent := helper.ExtractContentByTag(res, "thought")
 		if thoughtContent != "" {
+			thoughts = append(thoughts, strings.TrimSpace(thoughtContent))
 			if len(hooks.ThoughtHandlers) > 0 {
 				hooks.EmitThought(thoughtContent)
 			} else if noHooks {
@@ -127,16 +132,14 @@ func (a *Agent) Run(input string) {
 			} else if noHooks {
 				fmt.Println("✅Final Answer:", finalAnswerContent)
 			}
-			var out strings.Builder
-			for _, line := range messages {
-				fmt.Fprintf(&out, "%s: %s\n", line.Role, line.Content)
-			}
-			break
+			return RunResult{
+				Thought:     strings.Join(thoughts, "\n"),
+				FinalAnswer: finalAnswerContent,
+			}, nil
 		}
 
 		// 检测action标签并提取action内容
 		actionContent := helper.ExtractContentByTag(res, "action")
-		obsText := ""
 		if actionContent != "" {
 			if len(hooks.ActionHandlers) > 0 {
 				hooks.EmitAction(actionContent)
@@ -148,22 +151,38 @@ func (a *Agent) Run(input string) {
 			if len(hooks.ToolResultHandlers) > 0 {
 				hooks.EmitToolResult(actionContent, actionRes, err)
 			}
+			obsText := ""
 			if err != nil {
 				if noHooks {
 					fmt.Println("执行action失败", err)
 				}
-				obsText = fmt.Sprintf("<observation>执行action失败：%s</observation>", err.Error())
+				obsText = fmt.Sprintf("<observation>执行action失败：%s\n%s</observation>", err.Error(), actionRes)
 			} else {
 				if noHooks {
 					fmt.Println("执行action成功", actionRes)
 				}
 				obsText = fmt.Sprintf("<observation>%s</observation>", actionRes)
 			}
-		}
 
-		messages = append(messages, schema.OpenAIMessage{
-			Role:    schema.OpenAIMessageRoleUser,
-			Content: obsText,
-		})
+			messages = append(messages, schema.OpenAIMessage{
+				Role:    schema.OpenAIMessageRoleUser,
+				Content: obsText,
+			})
+			continue
+		}
+		return RunResult{}, fmt.Errorf("assistant 输出缺少 action 或 final_answer: %s", res)
 	}
+}
+
+func (a *Agent) Run(input string) {
+	if input == "" {
+		fmt.Println("输入为空")
+		return
+	}
+	_, _ = a.RunWithMessages([]schema.OpenAIMessage{
+		{
+			Role:    schema.OpenAIMessageRoleUser,
+			Content: fmt.Sprintf("<question>%s</question>", input),
+		},
+	})
 }

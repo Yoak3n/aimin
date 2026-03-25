@@ -13,6 +13,11 @@ func ComplexTaskForSkill(ctx *Context) string {
 		return "args is empty"
 	}
 	p = strings.TrimSpace(p)
-	skill.GlobalSkillHUB().Active = p
-	return fmt.Sprintf("加载技能【%s】完成，已注入到上下文，请继续执行任务", p)
+	if p == "..." {
+		skill.GlobalSkillHUB().Active = ""
+		return "已清除当前激活技能"
+	} else {
+		skill.GlobalSkillHUB().Active = p
+		return fmt.Sprintf("加载技能【%s】完成，已注入到上下文，请继续执行任务", p)
+	}
 }

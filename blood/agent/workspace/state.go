@@ -20,6 +20,7 @@ func EnsureWorkspace() bool {
 		// 默认工作目录
 		path = "./default_workspace"
 		config.GlobalConfiguration().Workspace.Path, _ = filepath.Abs(path)
+		config.GlobalConfiguration().Save()
 		flag = true
 	}
 

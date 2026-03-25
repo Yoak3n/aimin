@@ -82,3 +82,20 @@ func CopyFile(srcPath, dstPath string) error {
 	}
 	return nil
 }
+
+func TruncateChars(str string, max int) string {
+	rs := []rune(str)
+	if len(rs) <= max {
+		return str
+	}
+	return string(rs[:max]) + "\n...truncated"
+}
+
+func PushLimited(o, suffix string, max int) string {
+	rs := []rune(o)
+	n := len([]rune(suffix))
+	if len(rs)+n > max {
+		return o
+	}
+	return string(rs) + suffix
+}

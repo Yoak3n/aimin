@@ -34,31 +34,30 @@ func ExtractContentByTag(text, tagName string) string {
 }
 
 func ParseFunctionCall(text string) (functionName string, args string, err error) {
-	// 正则表达式解析：
-	// ^(\w+)       - 匹配并捕获开头的函数名（字母、数字、下划线）。
-	// \s*          - 匹配函数名和括号之间可能存在的任意空格。
-	// \(           - 匹配一个字面的左括号。
-	// (.*)         - 捕获括号内的所有内容。
-	// \)           - 匹配一个字面的右括号。
-	// $            - 确保匹配到字符串末尾。
-	re := regexp.MustCompile(`^(\w+)\s*\((.*)\)$`)
-
-	// 查找匹配项和子匹配（捕获组）
-	matches := re.FindStringSubmatch(text)
-
-	// FindStringSubmatch 应该返回3个元素：
-	// 1. 整个匹配的字符串
-	// 2. 第一个捕获组（函数名）
-	// 3. 第二个捕获组（参数）
-	if len(matches) != 3 {
-		return "", "", fmt.Errorf("invalid function call format: text does not match 'function(...)'. Got: %s", text)
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "", "", fmt.Errorf("invalid function call format: empty text")
 	}
 
-	functionName = matches[1]
-	args = matches[2]
-	err = nil
+	open := strings.Index(text, "(")
+	if open <= 0 {
+		return "", "", fmt.Errorf("invalid function call format: missing '(' . Got: %s", text)
+	}
 
-	return
+	functionName = strings.TrimSpace(text[:open])
+	if functionName == "" || !regexp.MustCompile(`^\w+$`).MatchString(functionName) {
+		return "", "", fmt.Errorf("invalid function call format: invalid function name. Got: %s", text)
+	}
+
+	rest := strings.TrimSpace(text[open+1:])
+	if rest == "" {
+		return functionName, "", nil
+	}
+
+	if strings.HasSuffix(text, ")") {
+		rest = strings.TrimSuffix(rest, ")")
+	}
+	return functionName, rest, nil
 }
 
 func StripFrontMatter(content string) string {
