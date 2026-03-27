@@ -19,7 +19,7 @@ type ContextChoice int8
 
 const (
 	Normal ContextChoice = iota
-	Remote ContextChoice = iota
+	Remote
 )
 
 func makeFileSpecMap(choose ContextChoice) map[string]FileSpec {

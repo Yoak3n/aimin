@@ -12,7 +12,6 @@ import (
 // 确保工作目录存在并初始化
 // 返回值：是否是第一次创建工作目录
 func EnsureWorkspace() bool {
-
 	// 标记是否是第一次创建工作目录
 	flag := false
 	path := config.GlobalConfiguration().Workspace.Path

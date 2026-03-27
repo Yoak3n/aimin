@@ -8,7 +8,7 @@ import (
 )
 
 type ConversationAgent struct {
-	Base     *Agent
+	Base     *ReActAgent
 	Messages []schema.OpenAIMessage
 	MaxTurns int
 }
@@ -18,7 +18,7 @@ type ConversationTurn struct {
 	FinalAnswer string
 }
 
-func NewConversationAgent(base *Agent) *ConversationAgent {
+func NewConversationAgent(base *ReActAgent) *ConversationAgent {
 	if base == nil {
 		base = NewAgent()
 	}

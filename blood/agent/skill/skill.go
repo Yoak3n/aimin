@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/Yoak3n/aimin/blood/config"
 )
 
 var (
@@ -37,7 +39,8 @@ func NewSkillHUB() *SkillHUB {
 func GlobalSkillHUB() *SkillHUB {
 	once.Do(func() {
 		hub = NewSkillHUB()
-		hub.ScanSkills("./skills")
+		path := fmt.Sprintf("%s/skills", config.GlobalConfiguration().Workspace.Path)
+		hub.ScanSkills(path)
 	})
 	return hub
 }
