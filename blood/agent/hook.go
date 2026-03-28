@@ -1,12 +1,14 @@
 package agent
 
+import "github.com/Yoak3n/aimin/blood/schema"
+
 type AgentHooks struct {
 	ThoughtHandlers        []func(string)
 	ActionHandlers         []func(string)
 	ToolResultHandlers     []func(action string, result string, err error)
 	FinalAnswerHandlers    []func(string)
 	AssistantDeltaHandlers []func(string) error
-	LLMResponseHandlers    []func(string)
+	LLMResponseHandlers    []func(systemPrompt string, messages []schema.OpenAIMessage, response string)
 }
 
 func NewAgentHooks() *AgentHooks {
@@ -57,7 +59,7 @@ func (h *AgentHooks) AddAssistantDeltaHandler(f func(string) error) {
 	h.AssistantDeltaHandlers = append(h.AssistantDeltaHandlers, f)
 }
 
-func (h *AgentHooks) AddLLMResponseHandler(f func(string)) {
+func (h *AgentHooks) AddLLMResponseHandler(f func(systemPrompt string, messages []schema.OpenAIMessage, response string)) {
 	if f == nil {
 		return
 	}
@@ -88,9 +90,9 @@ func (h *AgentHooks) EmitFinalAnswer(v string) {
 	}
 }
 
-func (h *AgentHooks) EmitLLMResponse(v string) {
+func (h *AgentHooks) EmitLLMResponse(systemPrompt string, messages []schema.OpenAIMessage, response string) {
 	for _, f := range h.LLMResponseHandlers {
-		f(v)
+		f(systemPrompt, messages, response)
 	}
 }
 

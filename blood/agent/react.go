@@ -82,7 +82,7 @@ func (a *ReActAgent) RegisterAssistantDeltaHandler(h func(string) error) {
 	a.ensureHooks().AddAssistantDeltaHandler(h)
 }
 
-func (a *ReActAgent) RegisterLLMResponseHandler(h func(string)) {
+func (a *ReActAgent) RegisterLLMResponseHandler(h func(systemPrompt string, messages []schema.OpenAIMessage, response string)) {
 	a.ensureHooks().AddLLMResponseHandler(h)
 }
 
@@ -107,7 +107,8 @@ func (a *ReActAgent) RunWithMessages(messages []schema.OpenAIMessage) (RunResult
 			return RunResult{}, err
 		}
 		if len(hooks.LLMResponseHandlers) > 0 {
-			hooks.EmitLLMResponse(res)
+			msgSnapshot := append([]schema.OpenAIMessage(nil), messages...)
+			hooks.EmitLLMResponse(sp, msgSnapshot, res)
 		}
 		messages = append(messages, schema.OpenAIMessage{
 			Role:    schema.OpenAIMessageRoleAssistant,

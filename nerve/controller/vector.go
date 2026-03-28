@@ -39,7 +39,7 @@ func FetchMemoryStrategy(messages []schema.OpenAIMessage) string {
 - predicate：使用动词或关系短语，如“喜欢/位于/属于/承诺/认识/工作于/发生于”等
 - 若抽取不到三元组但仍属长期记忆，可用 content 填稳定事实陈述`
 	userPrompt := schema.OpenAIMessage{
-		Role:    "user",
+		Role:    schema.OpenAIMessageRoleUser,
 		Content: formatMessage,
 	}
 	answer, err := helper.UseLLM().Chat([]schema.OpenAIMessage{userPrompt}, systemPrompt)

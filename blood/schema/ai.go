@@ -3,6 +3,7 @@ package schema
 const (
 	OpenAIMessageRoleUser      = "user"
 	OpenAIMessageRoleAssistant = "assistant"
+	OpenAIMessageRoleSystem    = "system"
 )
 
 type OpenAIMessageRole string

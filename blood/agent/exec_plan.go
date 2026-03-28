@@ -1,6 +1,9 @@
 package agent
 
-import "github.com/Yoak3n/aimin/blood/agent/mcp"
+import (
+	"github.com/Yoak3n/aimin/blood/agent/mcp"
+	"github.com/Yoak3n/aimin/blood/schema"
+)
 
 type ExecPlanAgent struct {
 	Hooks *AgentHooks
@@ -33,7 +36,7 @@ func (e *ExecPlanAgent) RegisterAssistantDeltaHandler(h func(string) error) {
 	e.ensureHooks().AddAssistantDeltaHandler(h)
 }
 
-func (e *ExecPlanAgent) RegisterLLMResponseHandler(h func(string)) {
+func (e *ExecPlanAgent) RegisterLLMResponseHandler(h func(systemPrompt string, messages []schema.OpenAIMessage, response string)) {
 	e.ensureHooks().AddLLMResponseHandler(h)
 }
 
@@ -75,7 +78,7 @@ func (es *ExecPlanSubAgent) RegisterAssistantDeltaHandler(h func(string) error) 
 	es.ensureHooks().AddAssistantDeltaHandler(h)
 }
 
-func (es *ExecPlanSubAgent) RegisterLLMResponseHandler(h func(string)) {
+func (es *ExecPlanSubAgent) RegisterLLMResponseHandler(h func(systemPrompt string, messages []schema.OpenAIMessage, response string)) {
 	es.ensureHooks().AddLLMResponseHandler(h)
 }
 
