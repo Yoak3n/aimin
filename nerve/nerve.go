@@ -1,15 +1,17 @@
 package nerve
 
 import (
+	"errors"
+	"fmt"
+	"log"
+	"strings"
+	"time"
+
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/pkg/util"
 	"github.com/Yoak3n/aimin/blood/schema"
-	"errors"
-	"log"
-	nc "github.com/Yoak3n/aimin/nerve/controller"
+	"github.com/Yoak3n/aimin/nerve/controller"
 	"github.com/Yoak3n/aimin/nerve/memory"
-	"strings"
-	"time"
 
 	"github.com/tidwall/gjson"
 )
@@ -18,22 +20,65 @@ type Nerve struct {
 	Hippocampus *memory.Hippocampus
 }
 
-func AddMemory(messages []schema.DialogueRecord) error {
-	ids := make([]string, 0, len(messages))
-	resources := make([]schema.OpenAIMessage, 0, len(messages))
-	for _, message := range messages {
-		resources = append(resources, schema.OpenAIMessage{
-			Role:    schema.OpenAIMessageRole(message.Role),
-			Content: message.Content,
-		})
-		ids = append(ids, message.Id)
-	}
-	strategy := nc.FetchMemoryStrategy(resources)
+func AddMemory(messages []schema.OpenAIMessage) error {
+	// ids := make([]string, 0, len(messages))
+	// resources := make([]schema.OpenAIMessage, 0, len(messages))
+	// for _, message := range messages {
+	// 	resources = append(resources, schema.OpenAIMessage{
+	// 		Role:    schema.OpenAIMessageRole(message.Role),
+	// 		Content: message.Content,
+	// 	})
+	// 	ids = append(ids, message.Id)
+	// }
+	// strategy := nc.FetchMemoryStrategy(resources)
 
-	if strategy == "" {
-		return errors.New("failed to fetch memory strategy")
+	// if strategy == "" {
+	// 	return errors.New("failed to fetch memory strategy")
+	// }
+	// return extractStrategy(strategy, ids)
+	return nil
+}
+
+func ResponseHook(systemPrompt, answer string, messages []schema.OpenAIMessage) {
+	question, thoughts := extractQuestionAndThoughts(messages)
+	cid := util.RandomIdWithPrefix("con-")
+	now := time.Now()
+	c := &schema.ConversationRecord{
+		Id:        cid,
+		Question:  question,
+		Thoughts:  thoughts,
+		Answer:    answer,
+		System:    systemPrompt,
+		CreateAt:  now,
+		UpdatedAt: now,
 	}
-	return extractStrategy(strategy, ids)
+	embeding, err := helper.UseLLM().Embedding([]string{question + "---" + answer})
+	if err != nil {
+		log.Fatal(err)
+	}
+	go helper.UseDB().CreateConversationRecord(c, embeding[0])
+	go controller.SummaryConversation(c, cid)
+}
+
+func QueryReleventConversations(input string) (string, error) {
+	conversations := make([]schema.ConversationRecord, 0)
+	embeding, err := helper.UseLLM().Embedding([]string{input})
+	if err != nil {
+		log.Fatal(err)
+	}
+	conversations, err = helper.UseDB().GetReleventConversationRecords(embeding[0])
+	if err != nil {
+		log.Fatal(err)
+	}
+	cl := strings.Builder{}
+	for _, conversation := range conversations {
+		fmt.Fprintf(&cl, "- [%s]%s---%s\n", conversation.Id, conversation.Question, conversation.Answer)
+	}
+	return cl.String(), nil
+}
+
+func GetConversationByID(id string) (schema.ConversationRecord, error) {
+	return helper.UseDB().GetConversationByID(id)
 }
 
 func extractStrategy(s string, source []string) error {
@@ -97,25 +142,7 @@ func extractStrategy(s string, source []string) error {
 }
 
 func addEnduring(m *memory.Memory, source []string, entitiesMap []schema.EntityTable) {
-	helper.UseDB().AddEntityTableRecord(entitiesMap)
-	e := &schema.EnduringMemoryTable{
-		Id:                m.Id,
-		Content:           m.Content,
-		Topic:             m.Topic,
-		LastSimulatedTime: m.LastSimulated,
-	}
-	embeddings, err := helper.UseLLM().Embedding([]string{m.Content})
-	if err != nil {
-		log.Println("Embedding error: ", err)
-		return
-	}
-	if len(embeddings) > 0 {
-		err = helper.UseDB().CreateEnduringTableRecord(*e, embeddings[0])
-		if err != nil {
-			log.Println("CreateEnduringTableRecord error: ", err)
-		}
-		_ = helper.UseDB().UpdatedDialogueRecordsLinks(source, m.Id)
-	}
+
 }
 
 func addTemporary(m *memory.Memory, source []string) {

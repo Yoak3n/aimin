@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/Yoak3n/aimin/blood/pkg/util"
 	"github.com/Yoak3n/aimin/blood/schema"
-	"github.com/Yoak3n/aimin/dna/action"
 	"github.com/Yoak3n/aimin/dna/fsm"
 )
 
@@ -29,8 +27,8 @@ func executeTask(ctx *fsm.Context) {
 		if ok {
 			switch data.Type {
 			case string(ConversationCreate):
-				conversationId := util.RandomIdWithPrefix("conversation")
-				action.EntryConversationTask(data.Payload.(string), conversationId, data.ID)
+				// conversationId := util.RandomIdWithPrefix("conversation")
+				// action.EntryConversationTask(data.Payload.(string), conversationId, data.ID)
 			case string(ConversationContinue):
 				var payload schema.ConversationContinuePayload
 				if p, ok := data.Payload.(schema.ConversationContinuePayload); ok {
@@ -47,7 +45,7 @@ func executeTask(ctx *fsm.Context) {
 						return
 					}
 				}
-				action.EntryConversationTask(payload.Question, payload.ConversationId, data.ID)
+				// action.EntryConversationTask(payload.Question, payload.ConversationId, data.ID)
 			}
 		}
 	}

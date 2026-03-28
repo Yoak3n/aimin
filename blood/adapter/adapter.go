@@ -222,8 +222,9 @@ func (b *BaseAdapter) Embedding(text []string) ([][]float32, error) {
 		return nil, fmt.Errorf("适配器类型不是 embedding")
 	}
 	reqBody := map[string]any{
-		"model": b.config.Model,
-		"input": text,
+		"model":      b.config.Model,
+		"input":      text,
+		"dimensions": config.GlobalConfiguration().Database.Dimension,
 	}
 
 	jsonData, err := json.Marshal(reqBody)

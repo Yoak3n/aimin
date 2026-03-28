@@ -7,8 +7,8 @@ type Workspace struct {
 	FileContentSize uint   `json:"file_content_size"`
 }
 
-func DefaultWorkspace() Workspace {
-	return Workspace{
+func DefaultWorkspace() *Workspace {
+	return &Workspace{
 		Path:            "",
 		MemoryDays:      7,
 		ContextSize:     8000,

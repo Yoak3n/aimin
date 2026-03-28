@@ -7,7 +7,7 @@ import (
 var db *implements.Database
 
 func init() {
-	db, _ = implements.NewDatabase(implements.DefaultDatabaseConfig())
+	db, _ = implements.NewDatabase()
 }
 
 func GetDB() *implements.Database {

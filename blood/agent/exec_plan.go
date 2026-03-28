@@ -28,7 +28,7 @@ func (e *ExecPlanAgent) RegisterToolResultHandler(h func(action string, result s
 	e.ensureHooks().AddToolResultHandler(h)
 }
 
-func (e *ExecPlanAgent) RegisterFinalAnswerHandler(h func(string)) {
+func (e *ExecPlanAgent) RegisterFinalAnswerHandler(h func(systemPrompt string, messages []schema.OpenAIMessage, finalAnswer string)) {
 	e.ensureHooks().AddFinalAnswerHandler(h)
 }
 
@@ -70,7 +70,7 @@ func (es *ExecPlanSubAgent) RegisterToolResultHandler(h func(action string, resu
 	es.ensureHooks().AddToolResultHandler(h)
 }
 
-func (es *ExecPlanSubAgent) RegisterFinalAnswerHandler(h func(string)) {
+func (es *ExecPlanSubAgent) RegisterFinalAnswerHandler(h func(systemPrompt string, messages []schema.OpenAIMessage, finalAnswer string)) {
 	es.ensureHooks().AddFinalAnswerHandler(h)
 }
 

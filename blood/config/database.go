@@ -32,3 +32,17 @@ func (d *DatabaseConfig) Info() (string, error) {
 func (d *DatabaseConfig) Tag() string {
 	return "database"
 }
+
+// DefaultDatabaseConfig 返回默认数据库配置
+func DefaultDatabaseConfig() *DatabaseConfig {
+	return &DatabaseConfig{
+		Host:      "localhost",
+		Port:      5432,
+		User:      "postgres",
+		Password:  "123456",
+		DBName:    "aimin",
+		SSLMode:   "disable",
+		TimeZone:  "Asia/Shanghai",
+		Dimension: 2560,
+	}
+}

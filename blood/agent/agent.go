@@ -7,7 +7,7 @@ type Agent interface {
 	RegisterThoughtHandler(h func(string))
 	RegisterActionHandler(h func(string))
 	RegisterToolResultHandler(h func(action string, result string, err error))
-	RegisterFinalAnswerHandler(h func(string))
+	RegisterFinalAnswerHandler(h func(systemPrompt string, messages []schema.OpenAIMessage, finalAnswer string))
 	RegisterAssistantDeltaHandler(h func(string) error)
 	RegisterLLMResponseHandler(h func(systemPrompt string, messages []schema.OpenAIMessage, response string))
 }

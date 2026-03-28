@@ -6,7 +6,7 @@ type AgentHooks struct {
 	ThoughtHandlers        []func(string)
 	ActionHandlers         []func(string)
 	ToolResultHandlers     []func(action string, result string, err error)
-	FinalAnswerHandlers    []func(string)
+	FinalAnswerHandlers    []func(systemPrompt string, messages []schema.OpenAIMessage, finalAnswer string)
 	AssistantDeltaHandlers []func(string) error
 	LLMResponseHandlers    []func(systemPrompt string, messages []schema.OpenAIMessage, response string)
 }
@@ -45,7 +45,7 @@ func (h *AgentHooks) AddToolResultHandler(f func(action string, result string, e
 	h.ToolResultHandlers = append(h.ToolResultHandlers, f)
 }
 
-func (h *AgentHooks) AddFinalAnswerHandler(f func(string)) {
+func (h *AgentHooks) AddFinalAnswerHandler(f func(systemPrompt string, messages []schema.OpenAIMessage, finalAnswer string)) {
 	if f == nil {
 		return
 	}
@@ -84,9 +84,9 @@ func (h *AgentHooks) EmitToolResult(action string, result string, err error) {
 	}
 }
 
-func (h *AgentHooks) EmitFinalAnswer(v string) {
+func (h *AgentHooks) EmitFinalAnswer(systemPrompt string, messages []schema.OpenAIMessage, finalAnswer string) {
 	for _, f := range h.FinalAnswerHandlers {
-		f(v)
+		f(systemPrompt, messages, finalAnswer)
 	}
 }
 

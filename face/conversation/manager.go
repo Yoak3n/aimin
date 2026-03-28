@@ -2,15 +2,10 @@ package conversation
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
-	"github.com/Yoak3n/aimin/blood/dao/controller"
-	"github.com/Yoak3n/aimin/blood/pkg/helper"
-	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/blood/schema"
-	"github.com/Yoak3n/aimin/nerve/reason"
 )
 
 type Input struct {
@@ -95,113 +90,7 @@ func (m *Manager) ConversationLoop() {
 }
 
 func (m *Manager) executeConversation(data Input) {
-	conversationId := data.id
-	question := data.question
-	fmt.Printf("executeConversation: %v\n", data)
-	fmt.Println(conversationId, question)
-	questionMessage := schema.OpenAIMessage{Role: "user", Content: question}
-	if _, exist := m.conversationMap[conversationId]; !exist {
-		// conversationRecord, err := helper.UseDB().GetConversationRecord(conversationId)
-		// fmt.Printf("GetConversationRecord: %+v\n", conversationRecord)
-		// if err != nil || conversationRecord.Id == "" {
-		// 	// if errors.Is(err, gorm.ErrRecordNotFound) {
-		// 	delete(m.conversationMap, m.current)
-		// 	systemPrompt := reason.GenConversationSystemPrompt()
-		// 	m.conversationMap[conversationId] = &Conversation{
-		// 		Id:           conversationId,
-		// 		Messages:     []schema.OpenAIMessage{questionMessage},
-		// 		systemPrompt: systemPrompt,
-		// 	}
-		// 	// } else {
-		// 	// 	fmt.Println("获取旧有对话记录失败", err)
-		// 	// 	return
-		// 	// }
-		// } else {
-		// 	fmt.Println("旧有对话", conversationId)
-		// 	// 旧有对话从数据库中读取
-		// 	records, err := controller.GetDialoguesWithConversation(conversationId)
-		// 	if err != nil {
-		// 		fmt.Println("获取旧有对话记录失败", err)
-		// 		return
-		// 	}
-		// 	var openAIMessages []schema.OpenAIMessage
-		// 	for idx, record := range records {
-		// 		if idx == len(records)-1 && record.Role == "user" {
-		// 			continue
-		// 		}
-		// 		openAIMessages = append(openAIMessages, schema.OpenAIMessage{
-		// 			Role:    record.Role,
-		// 			Content: record.Content,
-		// 		})
-		// 	}
-		// 	m.conversationMap[conversationId] = &Conversation{
-		// 		Id:           conversationId,
-		// 		Messages:     openAIMessages,
-		// 		systemPrompt: conversationRecord.SystemPrompt,
-		// 	}
-		// }
-		conversationRecord, err := helper.UseDB().GetConversationRecord(conversationId)
-		if err != nil {
-			fmt.Println("获取对话失败", err)
-			return
-		}
-		records, err := controller.GetDialoguesWithConversation(conversationId)
-		if err != nil {
-			fmt.Println("获取对话消息失败", err)
-			systemPrompt := reason.GenConversationSystemPrompt()
-			m.conversationMap[conversationId] = &Conversation{
-				Id:           conversationId,
-				Messages:     []schema.OpenAIMessage{questionMessage},
-				systemPrompt: systemPrompt,
-			}
-		} else {
-			var openAIMessages []schema.OpenAIMessage
-			for idx, record := range records {
-				if idx == len(records)-1 && record.Role == "user" {
-					continue
-				}
-				openAIMessages = append(openAIMessages, schema.OpenAIMessage{
-					Role:    schema.OpenAIMessageRole(record.Role),
-					Content: record.Content,
-				})
-			}
-			openAIMessages = append(openAIMessages, questionMessage)
-			m.conversationMap[conversationId] = &Conversation{
-				Id:           conversationId,
-				Messages:     openAIMessages,
-				systemPrompt: conversationRecord.SystemPrompt,
-			}
-		}
-		// // 切换当前对话到新对话，不让map继续扩充减少内存占用
-	} else {
-		m.conversationMap[conversationId].Messages = append(m.conversationMap[conversationId].Messages, questionMessage)
-	}
-	fmt.Printf("messages: %+v\n", m.conversationMap[conversationId].Messages)
-	err := controller.CreateDialogueWithConversation(questionMessage, conversationId)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	m.current = conversationId
-	fmt.Println("当前对话", m.current)
-	// 之后再包一层思考层
-	answer, err := helper.UseLLM().Chat(m.conversationMap[conversationId].Messages, m.conversationMap[conversationId].systemPrompt)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Printf("executeConversation: %v\n", answer)
-	logger.Logger.Println(answer)
-	answerMessage := schema.OpenAIMessage{Role: "assistant", Content: answer}
-	m.conversationMap[conversationId].Messages = append(m.conversationMap[conversationId].Messages, answerMessage)
 
-	err = controller.CreateDialogueWithConversation(answerMessage, conversationId)
-	if err != nil {
-		return
-	}
-	if m.replyHandler != nil {
-		m.replyHandler(conversationId, answer)
-	}
 }
 
 func (m *Manager) exitConversation() {

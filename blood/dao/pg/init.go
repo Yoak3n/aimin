@@ -10,16 +10,13 @@ func InitDatabase(db *gorm.DB, dim int) error {
 	if err := AddVectorExtension(db); err != nil {
 		return err
 	}
-	if err := TemporaryMemoryTable(db); err != nil {
-		return err
-	}
-	if err := EnduringMemoryTable(db, dim); err != nil {
+	if err := ConversationTable(db, dim); err != nil {
 		return err
 	}
 	if err := MetacognitionTable(db); err != nil {
 		return err
 	}
-	return db.AutoMigrate(schema.ConversationRecord{}, schema.DialogueRecord{}, schema.EntityTable{}, schema.MetacognitionLinkTable{})
+	return db.AutoMigrate(schema.SummaryMemoryTable{}, schema.EntityTable{}, schema.MetacognitionLinkTable{})
 }
 
 func AddVectorExtension(db *gorm.DB) error {

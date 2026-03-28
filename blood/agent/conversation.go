@@ -51,7 +51,7 @@ func (c *ConversationAgent) Ask(question string) (ConversationTurn, error) {
 	replacedHooks := false
 	if origHooks == nil || origHooks.IsEmpty() {
 		h := NewAgentHooks()
-		h.AddFinalAnswerHandler(func(string) {})
+		h.AddFinalAnswerHandler(func(string, []schema.OpenAIMessage, string) {})
 		c.Base.SetHooks(h)
 		replacedHooks = true
 	}

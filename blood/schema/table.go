@@ -7,49 +7,57 @@ import (
 )
 
 type ConversationRecord struct {
-	Id           string `json:"id" gorm:"primary key"`
-	Topic        string `json:"topic"`
-	From         string `json:"from"`
-	SystemPrompt string `json:"system_prompt"`
-	CreateAt     time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	DeletedAt    gorm.DeletedAt `gorm:"index"`
+	Id        string         `json:"id" gorm:"primary key"`
+	Question  string         `json:"question"`
+	Thoughts  string         `json:"thoughts"`
+	Answer    string         `json:"answer"`
+	System    string         `json:"system"`
+	CreateAt  time.Time      `json:"created_at" gorm:"column:created_at"`
+	UpdatedAt time.Time      `json:"updated_at" gorm:"column:updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index"`
+	// Embedding []float32      `gorm:"serializer:json"`
 }
 
-type DialogueRecord struct {
-	Id             string `json:"id" gorm:"primary key"`
-	Role           string `json:"role"`
-	Content        string `json:"content"`
-	Link           string
-	ConversationId string    `json:"conversation_id"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	DeletedAt      gorm.DeletedAt `gorm:"index"`
+func (ConversationRecord) TableName() string { return "conversation" }
+
+type SummaryMemoryTable struct {
+	Id string `gorm:"primary key"`
+	// Link is the link to the conversation
+	Link              string         `json:"link"`
+	Content           string         `json:"content"`
+	LastSimulatedTime time.Time      `json:"last_simulate_time" gorm:"column:last_simulate_time"`
+	CreatedAt         time.Time      `json:"created_at" gorm:"column:created_at"`
+	UpdatedAt         time.Time      `json:"updated_at" gorm:"column:updated_at"`
+	DeletedAt         gorm.DeletedAt `gorm:"index"`
 }
+
+func (SummaryMemoryTable) TableName() string { return "summary_memory" }
 
 type TemporaryMemoryTable struct {
-	Id                string    `gorm:"primary key"`
-	Topic             string    `gorm:"topic"`
-	Count             int       `gorm:"count"`
-	Content           string    `gorm:"content"`
-	LastSimulatedTime time.Time `gorm:"last_simulate_time"`
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	Id               string         `json:"id" gorm:"primary key"`
+	Topic            string         `json:"topic"`
+	Content          string         `json:"content"`
+	LastSimulateTime time.Time      `json:"last_simulate_time" gorm:"column:last_simulate_time"`
+	CreatedAt        time.Time      `json:"created_at" gorm:"column:created_at"`
+	UpdatedAt        time.Time      `json:"updated_at" gorm:"column:updated_at"`
+	DeletedAt        gorm.DeletedAt `gorm:"index"`
+}
+
+func (TemporaryMemoryTable) TableName() string { return "temporary_memory" }
+
+type EnduringMemoryTable struct {
+	Id                string         `json:"id" gorm:"primary key"`
+	Topic             string         `json:"topic"`
+	Content           string         `json:"content"`
+	Count             int            `json:"count"`
+	LastSimulatedTime time.Time      `json:"last_simulated_time" gorm:"column:last_simulated_time"`
+	Embedding         string         `json:"embedding" gorm:"type:vector"`
+	CreatedAt         time.Time      `json:"created_at" gorm:"column:created_at"`
+	UpdatedAt         time.Time      `json:"updated_at" gorm:"column:updated_at"`
 	DeletedAt         gorm.DeletedAt `gorm:"index"`
 }
 
-type EnduringMemoryTable struct {
-	Id                string    `gorm:"primary key"`
-	Topic             string    `json:"topic"`
-	Content           string    `json:"content"`
-	Count             int       `json:"count"`
-	LastSimulatedTime time.Time `json:"last_simulate_time"`
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	DeletedAt         gorm.DeletedAt `gorm:"index"`
-	// 嵌入向量  仅用作数据库比较，不需要读取
-	// Embedding []float32 `gorm:"serializer:json"`
-}
+func (EnduringMemoryTable) TableName() string { return "enduring_memory" }
 
 type EntityTable struct {
 	gorm.Model

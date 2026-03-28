@@ -22,28 +22,12 @@ type Database struct {
 	Config     *config.DatabaseConfig
 }
 
-// DefaultDatabaseConfig 返回默认数据库配置
-func DefaultDatabaseConfig() *config.DatabaseConfig {
-	return &config.DatabaseConfig{
-		Host:      "localhost",
-		Port:      5432,
-		User:      "postgres",
-		Password:  "123456",
-		DBName:    "hippo",
-		SSLMode:   "disable",
-		TimeZone:  "Asia/Shanghai",
-		Dimension: 2560,
-	}
-}
-
 // NewDatabase 创建新的数据库连接实例
-func NewDatabase(config *config.DatabaseConfig) (*Database, error) {
-	if config == nil {
-		config = DefaultDatabaseConfig()
-	}
+func NewDatabase() (*Database, error) {
+	conf := config.GlobalConfiguration()
 	neuroDB := neo4j.NewNeuroDB(7687)
 	db := &Database{
-		Config:  config,
+		Config:  conf.Database,
 		NeuroDB: neuroDB,
 	}
 	err := CreateDatabase(db.Config)

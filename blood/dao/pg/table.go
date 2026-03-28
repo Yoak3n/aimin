@@ -6,38 +6,23 @@ import (
 	"gorm.io/gorm"
 )
 
-func TemporaryMemoryTable(db *gorm.DB) error {
-	temporaryMemoryTableSQL := `
-		CREATE TABLE IF NOT EXISTS temporary_memory (
-			id TEXT PRIMARY KEY,
-			topic TEXT NOT NULL,
-			content TEXT,
-			count INTEGER DEFAULT 0,
-			last_simulated_time TIMESTAMP,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			deleted_at TIMESTAMP
-		);`
-	return db.Exec(temporaryMemoryTableSQL).Error
-}
-
-// EnduringMemoryTable 创建长期记忆表,指定向量化的维度
-func EnduringMemoryTable(db *gorm.DB, dim int) error {
-	enduringMemoryTableTemplate := `
-CREATE TABLE IF NOT EXISTS enduring_memory (
+// ConversationTable 创建对话表,指定向量化的维度
+func ConversationTable(db *gorm.DB, dim int) error {
+	conversationTableTemplate := `CREATE TABLE IF NOT EXISTS conversation (
 	id TEXT PRIMARY KEY, 
-	topic TEXT NOT NULL,
-	content TEXT, 
-	count INTEGER DEFAULT 0,
-	last_simulated_time TIMESTAMP,
+	question TEXT NOT NULL, 
+	thoughts TEXT NOT NULL,
+	answer TEXT NOT NULL,
+	system TEXT,
 	embedding VECTOR(%d),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP
 );`
-	enduringMemoryTableSQL := fmt.Sprintf(enduringMemoryTableTemplate, dim)
+	// 向量化question 和 answer
+	conversationTableSQL := fmt.Sprintf(conversationTableTemplate, dim)
 
-	return db.Exec(enduringMemoryTableSQL).Error
+	return db.Exec(conversationTableSQL).Error
 }
 
 func MetacognitionTable(db *gorm.DB) error {

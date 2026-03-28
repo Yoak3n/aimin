@@ -74,7 +74,7 @@ func (a *ReActAgent) RegisterToolResultHandler(h func(action string, result stri
 	a.ensureHooks().AddToolResultHandler(h)
 }
 
-func (a *ReActAgent) RegisterFinalAnswerHandler(h func(string)) {
+func (a *ReActAgent) RegisterFinalAnswerHandler(h func(systemPrompt string, messages []schema.OpenAIMessage, finalAnswer string)) {
 	a.ensureHooks().AddFinalAnswerHandler(h)
 }
 
@@ -129,7 +129,8 @@ func (a *ReActAgent) RunWithMessages(messages []schema.OpenAIMessage) (RunResult
 		finalAnswerContent := helper.ExtractContentByTag(res, "final_answer")
 		if finalAnswerContent != "" {
 			if len(hooks.FinalAnswerHandlers) > 0 {
-				hooks.EmitFinalAnswer(finalAnswerContent)
+				msgSnapshot := append([]schema.OpenAIMessage(nil), messages...)
+				hooks.EmitFinalAnswer(sp, msgSnapshot, finalAnswerContent)
 			} else if noHooks {
 				fmt.Println("✅Final Answer:", finalAnswerContent)
 			}
