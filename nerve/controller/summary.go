@@ -37,7 +37,7 @@ func SummaryConversation(c *schema.ConversationRecord, cid string) (string, erro
 		return "", err
 	}
 	s := &schema.SummaryMemoryTable{
-		Id:                util.RandomIdWithPrefix("sum-"),
+		Id:                util.RandomIdWithPrefix("sum"),
 		Link:              cid,
 		LastSimulatedTime: c.CreateAt,
 		Content:           content,

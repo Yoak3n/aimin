@@ -68,31 +68,31 @@ func (h *AgentHooks) AddLLMResponseHandler(f func(systemPrompt string, messages 
 
 func (h *AgentHooks) EmitThought(v string) {
 	for _, f := range h.ThoughtHandlers {
-		f(v)
+		go f(v)
 	}
 }
 
 func (h *AgentHooks) EmitAction(v string) {
 	for _, f := range h.ActionHandlers {
-		f(v)
+		go f(v)
 	}
 }
 
 func (h *AgentHooks) EmitToolResult(action string, result string, err error) {
 	for _, f := range h.ToolResultHandlers {
-		f(action, result, err)
+		go f(action, result, err)
 	}
 }
 
 func (h *AgentHooks) EmitFinalAnswer(systemPrompt string, messages []schema.OpenAIMessage, finalAnswer string) {
 	for _, f := range h.FinalAnswerHandlers {
-		f(systemPrompt, messages, finalAnswer)
+		go f(systemPrompt, messages, finalAnswer)
 	}
 }
 
 func (h *AgentHooks) EmitLLMResponse(systemPrompt string, messages []schema.OpenAIMessage, response string) {
 	for _, f := range h.LLMResponseHandlers {
-		f(systemPrompt, messages, response)
+		go f(systemPrompt, messages, response)
 	}
 }
 

@@ -41,7 +41,7 @@ func AddMemory(messages []schema.OpenAIMessage) error {
 
 func ResponseHook(systemPrompt, answer string, messages []schema.OpenAIMessage) {
 	question, thoughts := extractQuestionAndThoughts(messages)
-	cid := util.RandomIdWithPrefix("con-")
+	cid := util.RandomIdWithPrefix("con")
 	now := time.Now()
 	c := &schema.ConversationRecord{
 		Id:        cid,
