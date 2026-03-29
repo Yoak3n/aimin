@@ -151,7 +151,7 @@ func (wc *WorkspaceContext) BuildWorkspaceRoots() *WorkspaceContext {
 	workspaceRoots := config.GlobalConfiguration().Workspace.Path
 
 	var sb strings.Builder
-	sb.WriteString("工作空间路径：" + workspaceRoots + "\n")
+	sb.WriteString("工作空间绝对路径（所有 workspace 文件操作必须基于此路径）：" + workspaceRoots + "\n")
 	dir, err := os.ReadDir(workspaceRoots)
 	if err != nil {
 		fmt.Fprintf(&sb, "Error reading workspace directory: %s\n", err)
@@ -202,7 +202,7 @@ func (wc *WorkspaceContext) BuildWorkspaceContext(plan ...ContextChoice) *Worksp
 			content := helper.StripFrontMatter(string(buf))
 			if content != "" {
 				content = util.TruncateChars(content, int(fileContentSize))
-				workspaceContext = util.PushLimited(workspaceContext, fmt.Sprintf("\n<workspace_file name=\"%s\">\n%s\n</workspace_file>", "BOOTSTRAP.md", content), int(contextSize))
+				workspaceContext = util.PushLimited(workspaceContext, fmt.Sprintf("\n<workspace_file name=\"%s\" path=\"%s\">\n%s\n</workspace_file>", "BOOTSTRAP.md", bootstrapPath, content), int(contextSize))
 			}
 		}
 	}
@@ -210,7 +210,7 @@ func (wc *WorkspaceContext) BuildWorkspaceContext(plan ...ContextChoice) *Worksp
 		if spec.Required && spec.Name != "BOOTSTRAP.md" {
 			absPath := filepath.Join(path, spec.RelPath)
 			if !util.FileExists(absPath) {
-				workspaceContext = util.PushLimited(workspaceContext, fmt.Sprintf("<workspace_file name=\"%s\"> not exists</workspace_file>", spec.Name), int(contextSize))
+				workspaceContext = util.PushLimited(workspaceContext, fmt.Sprintf("<workspace_file name=\"%s\" path=\"%s\"> not exists</workspace_file>", spec.Name, absPath), int(contextSize))
 				continue
 			}
 
@@ -230,7 +230,7 @@ func (wc *WorkspaceContext) BuildWorkspaceContext(plan ...ContextChoice) *Worksp
 			content = util.TruncateChars(content, int(fileContentSize))
 
 			ol := len(workspaceContext)
-			workspaceContext = util.PushLimited(workspaceContext, fmt.Sprintf("\n<workspace_file name=\"%s\">\n%s\n</workspace_file>", spec.Name, content), int(contextSize))
+			workspaceContext = util.PushLimited(workspaceContext, fmt.Sprintf("\n<workspace_file name=\"%s\" path=\"%s\">\n%s\n</workspace_file>", spec.Name, absPath, content), int(contextSize))
 			if len(workspaceContext) == ol {
 				return wc
 			}

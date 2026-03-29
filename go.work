@@ -1,9 +1,9 @@
 go 1.25.3
 
 use (
+	./aimin
 	./blood
 	./dna
-	./nerve
 	./face
-	./aimin
+	./nerve
 )

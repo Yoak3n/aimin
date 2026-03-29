@@ -11,7 +11,7 @@ func FileOperation(ctx *Context) string {
 	if p == "" {
 		return "args is empty"
 	}
-	args := parseArgs(p)
+	args := parseArgsN(p, 3)
 	op := strings.ToLower(strings.TrimSpace(firstNonEmpty(args["op"], args["action"], args["_0"])))
 	path := strings.TrimSpace(firstNonEmpty(args["path"], args["_1"]))
 	content := firstNonEmpty(args["content"], args["_2"])

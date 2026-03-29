@@ -47,7 +47,7 @@ func GrepTool() *Tool {
 func ManageMemoryTool() *Tool {
 	return &Tool{
 		Name:   "manage_memory",
-		Desc:   `Manage memory. args: action[,key=value...]. actions: read_long_term, write_long_term, read_daily, write_daily, search, recent_conversations, graph_get_node, graph_neighbors, graph_related, graph_search_nodes, graph_relations_by_link, graph_least_connected. eg: manage_memory(action="search",query="...")`,
+		Desc:   `Manage memory. args: action[,key=value...]. actions: read_long_term, write_long_term, read_daily, write_daily, search, vector_search, get_conversation, recent_conversations, graph_get_node, graph_neighbors, graph_related, graph_search_nodes, graph_relations_by_link. eg: manage_memory(action="vector_search",query="...")`,
 		Action: tool.ManageMemory,
 	}
 }

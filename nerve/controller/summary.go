@@ -10,24 +10,10 @@ import (
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/pkg/util"
 	"github.com/Yoak3n/aimin/blood/schema"
+	"github.com/Yoak3n/aimin/blood/service/llm"
 	"github.com/tidwall/gjson"
 )
 
-const summarySystemPrompt = `你是一个“时间线摘要器”。你会收到一次对话的四部分内容：
-- System prompt（系统提示词）
-- Question（用户问题）
-- Thoughts（助手思考过程，可能很长、含试错）
-- Answer（助手最终答复）
-
-你的任务：提炼出这次对话对未来最有用的信息，生成一条可用于时间线回溯的摘要。
-
-要求：
-- 用中文输出
-- 尽量短（建议 1-3 句，总字数 < 200），但不要丢失关键细节
-- 必须覆盖：用户意图/问题、关键结论/结果、关键动作或决策点（如涉及文件路径/函数名/命令/错误信息，保留最关键的 1-3 个）
-- 忽略无关寒暄、重复内容、无价值的推理过程
-- 不要复述 system prompt 原文，不要输出解释、步骤编号、JSON、Markdown、代码块
-- 如果信息不足，输出你能确定的最小摘要，不要编造`
 
 const temporarySummaryConfidenceThreshold = 0.6
 
@@ -89,7 +75,7 @@ func fetchMemoryStrategy(system, question, thoughts, answer string) string {
   - reason: 判定为长期的简要理由
 
 取值规范：
-- subject/object：自然语言实体名（如“Yoa”“Aimin”“项目A”“上海”）
+- subject/object：自然语言实体名（如“马斯克”“Aimin”“项目A”“上海”）
 - subject_type/object_type：人物/组织/地点/物品/事件/概念 等
 - predicate：动词或关系短语（如“喜欢/位于/属于/承诺/认识/工作于/发生于/是/偏好”）
 - 如果能判断为 enduring 但难以抽取具体三元组，也必须给出 1 条“弱三元组”（例如用“用户/对话主题”等作为实体）以满足结构要求。`
@@ -98,7 +84,7 @@ func fetchMemoryStrategy(system, question, thoughts, answer string) string {
 		Role:    schema.OpenAIMessageRoleUser,
 		Content: fmt.Sprintf("- System prompt:%s\n- Question:%s\n- Thoughts:%s\n- Answer:%s", system, question, thoughts, answer),
 	}
-	resp, err := helper.UseLLM().Chat([]schema.OpenAIMessage{userPrompt}, systemPrompt)
+	resp, err := llm.Chat([]schema.OpenAIMessage{userPrompt}, systemPrompt)
 	if err != nil {
 		return ""
 	}

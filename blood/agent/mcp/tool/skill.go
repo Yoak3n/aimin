@@ -12,7 +12,7 @@ func ComplexTaskForSkill(ctx *Context) string {
 	if p == "" {
 		return "args is empty"
 	}
-	args := parseArgs(p)
+	args := parseArgsN(p, 1)
 	p = strings.TrimSpace(firstNonEmpty(args["task"], args["_0"]))
 	if p == "..." {
 		skill.GlobalSkillHUB().Active = ""

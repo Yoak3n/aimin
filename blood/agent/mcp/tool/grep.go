@@ -19,7 +19,7 @@ func Grep(ctx *Context) string {
 		return "args is empty"
 	}
 
-	args := parseArgs(p)
+	args := parseArgsN(p, 4)
 	pattern := strings.TrimSpace(firstNonEmpty(args["pattern"], args["_0"]))
 	if pattern == "" {
 		return fmt.Sprintf("invalid args format for Grep: %s", p)

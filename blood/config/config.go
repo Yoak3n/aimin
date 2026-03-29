@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type OptionInterface interface {
@@ -68,6 +69,16 @@ func (c *Configuration) Save() error {
 func normalizeConfiguration(cfg *Configuration) {
 	if cfg == nil {
 		return
+	}
+	if cfg.DisabledLLM == nil {
+		cfg.DisabledLLM = map[string]int64{}
+	} else {
+		now := time.Now().Unix()
+		for k, until := range cfg.DisabledLLM {
+			if until <= now {
+				delete(cfg.DisabledLLM, k)
+			}
+		}
 	}
 	if cfg.Workspace == nil {
 		cfg.Workspace = DefaultWorkspace()

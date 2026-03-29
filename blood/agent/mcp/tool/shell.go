@@ -18,7 +18,7 @@ func ShellCommand(ctx *Context) string {
 	if p == "" {
 		return "ERROR: args is empty"
 	}
-	args := parseArgs(p)
+	args := parseArgsN(p, 2)
 	osType := strings.ToLower(strings.TrimSpace(firstNonEmpty(args["os_type"], args["os"], args["_0"])))
 	commandStr := strings.TrimSpace(firstNonEmpty(args["command"], args["_1"]))
 	if osType == "" || commandStr == "" {

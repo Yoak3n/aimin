@@ -12,6 +12,7 @@ import (
 	"github.com/Yoak3n/aimin/blood/config"
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/schema"
+	"github.com/Yoak3n/aimin/blood/service/retrieval"
 )
 
 func ManageMemory(ctx *Context) string {
@@ -69,7 +70,23 @@ func ManageMemory(ctx *Context) string {
 			return "ERROR: missing query"
 		}
 		limit := parseLimit(args["limit"], 5)
-		return manageMemorySearchConversations(query, limit)
+		return manageMemorySearchConversationSummaries(query, limit)
+	case "vector_search":
+		query := strings.TrimSpace(args["query"])
+		if query == "" {
+			query = strings.TrimSpace(args["_1"])
+		}
+		if query == "" {
+			return "ERROR: missing query"
+		}
+		limit := parseLimit(args["limit"], 5)
+		return manageMemoryVectorSearchConversationSummaries(query, limit)
+	case "get_conversation":
+		id := strings.TrimSpace(firstNonEmpty(args["id"], args["conversation_id"], args["_1"]))
+		if id == "" {
+			return "ERROR: missing id"
+		}
+		return manageMemoryGetConversationByID(id)
 	case "recent_conversations":
 		limit := parseLimit(args["limit"], 10)
 		return manageMemoryRecentConversations(limit)
@@ -104,10 +121,6 @@ func ManageMemory(ctx *Context) string {
 		}
 		limit := parseLimit(args["limit"], 50)
 		return manageMemoryGraphRelationsByLink(link, limit)
-	case "graph_least_connected":
-		nodeType := strings.TrimSpace(firstNonEmpty(args["node_type"], args["type"], args["_1"]))
-		limit := parseLimit(args["limit"], 10)
-		return manageMemoryGraphLeastConnected(nodeType, limit)
 	default:
 		return fmt.Sprintf("ERROR: unsupported action: %s", action)
 	}
@@ -217,31 +230,6 @@ func manageMemoryGraphRelationsByLink(link string, limit int) string {
 	return sb.String()
 }
 
-func manageMemoryGraphLeastConnected(nodeType string, limit int) string {
-	n4 := helper.UseDB().GetNeuroDB()
-	if n4 == nil {
-		return "ERROR: neuro db is nil"
-	}
-	items, err := n4.FindLeastConnectedNodes(nodeType, limit)
-	if err != nil {
-		return "ERROR: " + err.Error()
-	}
-	if len(items) == 0 {
-		return "no matches"
-	}
-	sb := strings.Builder{}
-	sb.WriteString("<graph_least_connected>\n")
-	if strings.TrimSpace(nodeType) != "" {
-		fmt.Fprintf(&sb, "<node_type>%s</node_type>\n", compactOneLine(nodeType, 80))
-	}
-	sb.WriteString("<nodes>\n")
-	for _, it := range items {
-		fmt.Fprintf(&sb, "<node>\n<type>%s</type>\n<name>%s</name>\n<degree>%d</degree>\n</node>\n", compactOneLine(it.Type, 80), compactOneLine(it.Name, 240), it.Degree)
-	}
-	sb.WriteString("</nodes>\n</graph_least_connected>")
-	return sb.String()
-}
-
 func manageMemoryReadLongTerm() string {
 	path, err := resolveWorkspaceFile("MEMORY.md")
 	if err != nil {
@@ -338,7 +326,7 @@ func manageMemoryWriteDaily(date string, content string) string {
 	return "ok"
 }
 
-func manageMemorySearchConversations(query string, limit int) string {
+func manageMemorySearchConversationSummaries(query string, limit int) string {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return "ERROR: query is empty"
@@ -373,14 +361,77 @@ func manageMemorySearchConversations(query string, limit int) string {
 	sb := strings.Builder{}
 	sb.WriteString("<search_results>\n")
 	for _, r := range records {
+		sum := ""
+		if s, err := helper.UseDB().GetSummaryMemoryTableRecordByLink(r.Id); err == nil {
+			sum = strings.TrimSpace(s.Content)
+		}
 		q := compactOneLine(r.Question, 240)
-		a := compactOneLine(r.Answer, 480)
-		fmt.Fprintf(&sb, "<conversation id=%q>\n", r.Id)
+		fmt.Fprintf(&sb, "<conversation_summary id=%q>\n", r.Id)
+		if sum != "" {
+			fmt.Fprintf(&sb, "<summary>%s</summary>\n", compactOneLine(sum, 600))
+		} else {
+			a := compactOneLine(r.Answer, 360)
+			fmt.Fprintf(&sb, "<summary>%s</summary>\n", compactOneLine(q+" / "+a, 600))
+		}
 		fmt.Fprintf(&sb, "<question>%s</question>\n", q)
-		fmt.Fprintf(&sb, "<answer>%s</answer>\n", a)
-		sb.WriteString("</conversation>\n")
+		sb.WriteString("</conversation_summary>\n")
 	}
 	sb.WriteString("</search_results>")
+	return sb.String()
+}
+
+func manageMemoryVectorSearchConversationSummaries(query string, limit int) string {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return "ERROR: query is empty"
+	}
+	records, err := retrieval.VectorSearchConversations(query, limit)
+	if err != nil {
+		return "ERROR: " + err.Error()
+	}
+	if len(records) == 0 {
+		return "no matches"
+	}
+
+	sb := strings.Builder{}
+	sb.WriteString("<vector_search_results>\n")
+	fmt.Fprintf(&sb, "<query>%s</query>\n", compactOneLine(query, 240))
+	for _, r := range records {
+		sum := ""
+		if s, err := helper.UseDB().GetSummaryMemoryTableRecordByLink(r.Id); err == nil {
+			sum = strings.TrimSpace(s.Content)
+		}
+		q := compactOneLine(r.Question, 240)
+		fmt.Fprintf(&sb, "<conversation_summary id=%q>\n", r.Id)
+		if sum != "" {
+			fmt.Fprintf(&sb, "<summary>%s</summary>\n", compactOneLine(sum, 600))
+		} else {
+			a := compactOneLine(r.Answer, 360)
+			fmt.Fprintf(&sb, "<summary>%s</summary>\n", compactOneLine(q+" / "+a, 600))
+		}
+		fmt.Fprintf(&sb, "<question>%s</question>\n", q)
+		sb.WriteString("</conversation_summary>\n")
+	}
+	sb.WriteString("</vector_search_results>")
+	return sb.String()
+}
+
+func manageMemoryGetConversationByID(id string) string {
+	rec, err := helper.UseDB().GetConversationByID(id)
+	if err != nil {
+		return "ERROR: " + err.Error()
+	}
+	sb := strings.Builder{}
+	fmt.Fprintf(&sb, "<conversation id=%q>\n", rec.Id)
+	if strings.TrimSpace(rec.System) != "" {
+		fmt.Fprintf(&sb, "<system>%s</system>\n", strings.TrimSpace(rec.System))
+	}
+	fmt.Fprintf(&sb, "<question>%s</question>\n", strings.TrimSpace(rec.Question))
+	if strings.TrimSpace(rec.Thoughts) != "" {
+		fmt.Fprintf(&sb, "<thoughts>%s</thoughts>\n", strings.TrimSpace(rec.Thoughts))
+	}
+	fmt.Fprintf(&sb, "<answer>%s</answer>\n", strings.TrimSpace(rec.Answer))
+	sb.WriteString("</conversation>")
 	return sb.String()
 }
 

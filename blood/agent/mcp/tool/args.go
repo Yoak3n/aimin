@@ -15,38 +15,44 @@ func firstNonEmpty(vs ...string) string {
 }
 
 func parseArgs(s string) map[string]string {
+	return parseArgsN(s, 0)
+}
+
+func parseArgsN(s string, maxPositional int) map[string]string {
 	out := make(map[string]string)
-	s = strings.TrimSpace(s)
+	s = strings.Trim(s, " \t\r")
 	if s == "" {
 		return out
 	}
 
-	parts := splitTopLevelCommas(s)
+	parts := splitTopLevelCommasN(s, maxPositional)
 	pos := 0
 	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
+		soft := strings.Trim(p, " \t\r")
+		if soft == "" {
 			continue
 		}
-		if k, v, ok := strings.Cut(p, "="); ok {
+		if k, v, ok := strings.Cut(soft, "="); ok {
 			k = strings.ToLower(strings.TrimSpace(k))
-			v = strings.TrimSpace(v)
+			v = strings.Trim(v, " \t\r")
 			v = strings.Trim(v, `"'`)
 			out[k] = v
 			continue
 		}
-		out[fmt.Sprintf("_%d", pos)] = strings.Trim(p, `"'`)
+		v := strings.Trim(soft, `"'`)
+		out[fmt.Sprintf("_%d", pos)] = v
 		pos++
 	}
 	return out
 }
 
-func splitTopLevelCommas(s string) []string {
+func splitTopLevelCommasN(s string, maxParts int) []string {
 	var out []string
 	var b strings.Builder
 	inSingle := false
 	inDouble := false
 	escape := false
+	partCount := 0
 
 	for _, r := range s {
 		if escape {
@@ -70,8 +76,13 @@ func splitTopLevelCommas(s string) []string {
 			continue
 		}
 		if r == ',' && !inSingle && !inDouble {
+			if maxParts > 0 && partCount >= maxParts-1 {
+				b.WriteRune(r)
+				continue
+			}
 			out = append(out, b.String())
 			b.Reset()
+			partCount++
 			continue
 		}
 		b.WriteRune(r)

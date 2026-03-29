@@ -9,9 +9,15 @@ require (
 )
 
 require (
+	github.com/tidwall/gjson v1.18.0 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.0 // indirect
+)
+
+require (
 	github.com/Yoak3n/aimin/blood v0.0.0-20260115184206-3de94c103cc3
 	github.com/Yoak3n/aimin/face v0.0.0-20260115184206-3de94c103cc3
-	github.com/Yoak3n/aimin/nerve v0.0.0-20260115184206-3de94c103cc3 // indirect
+	github.com/Yoak3n/aimin/nerve v0.0.0-20260115184206-3de94c103cc3
 	github.com/bytedance/sonic v1.14.0 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect

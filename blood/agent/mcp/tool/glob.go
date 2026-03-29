@@ -17,7 +17,7 @@ func Glob(ctx *Context) string {
 		return "args is empty"
 	}
 
-	args := parseArgs(p)
+	args := parseArgsN(p, 2)
 	pattern := strings.TrimSpace(firstNonEmpty(args["pattern"], args["_0"]))
 	if pattern == "" {
 		return fmt.Sprintf("invalid args format for Glob: %s", p)
