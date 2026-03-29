@@ -194,11 +194,23 @@ func (wc *WorkspaceContext) BuildWorkspaceContext(plan ...ContextChoice) *Worksp
 		plan = append(plan, Normal)
 	}
 	files := makeFileSpecMap(plan[0])
+	state, _ := LoadWorkspaceState(path)
+	bootstrapPath := filepath.Join(path, "BOOTSTRAP.md")
+	if state.SetupCompletedAt == "" && util.FileExists(bootstrapPath) {
+		buf, err := os.ReadFile(bootstrapPath)
+		if err == nil && len(buf) > 0 {
+			content := helper.StripFrontMatter(string(buf))
+			if content != "" {
+				content = util.TruncateChars(content, int(fileContentSize))
+				workspaceContext = util.PushLimited(workspaceContext, fmt.Sprintf("\n<workspace_file name=\"%s\">\n%s\n</workspace_file>", "BOOTSTRAP.md", content), int(contextSize))
+			}
+		}
+	}
 	for _, spec := range files {
-		if spec.Required {
+		if spec.Required && spec.Name != "BOOTSTRAP.md" {
 			absPath := filepath.Join(path, spec.RelPath)
 			if !util.FileExists(absPath) {
-				workspaceContext = util.PushLimited(workspaceContext, "\n"+spec.Name+" not exists", int(contextSize))
+				workspaceContext = util.PushLimited(workspaceContext, fmt.Sprintf("<workspace_file name=\"%s\"> not exists</workspace_file>", spec.Name), int(contextSize))
 				continue
 			}
 
@@ -218,7 +230,7 @@ func (wc *WorkspaceContext) BuildWorkspaceContext(plan ...ContextChoice) *Worksp
 			content = util.TruncateChars(content, int(fileContentSize))
 
 			ol := len(workspaceContext)
-			workspaceContext = util.PushLimited(workspaceContext, fmt.Sprintf("\n<workspace_file name=\"%s\">\n%s</workspace_file>", spec.Name, content), int(contextSize))
+			workspaceContext = util.PushLimited(workspaceContext, fmt.Sprintf("\n<workspace_file name=\"%s\">\n%s\n</workspace_file>", spec.Name, content), int(contextSize))
 			if len(workspaceContext) == ol {
 				return wc
 			}

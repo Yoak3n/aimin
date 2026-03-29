@@ -30,6 +30,10 @@ func ExtractContentByTag(text, tagName string) string {
 	}
 
 	// 如果没有找到匹配项
+	startTag := "<" + tagName + ">"
+	if start := strings.Index(text, startTag); start >= 0 {
+		return text[start+len(startTag):]
+	}
 	return ""
 }
 
@@ -39,23 +43,30 @@ func ParseFunctionCall(text string) (functionName string, args string, err error
 		return "", "", fmt.Errorf("invalid function call format: empty text")
 	}
 
-	open := strings.Index(text, "(")
-	if open <= 0 {
-		return "", "", fmt.Errorf("invalid function call format: missing '(' . Got: %s", text)
+	re := regexp.MustCompile(`\b(\w+)\s*\(`)
+	loc := re.FindStringSubmatchIndex(text)
+	if len(loc) < 4 {
+		return "", "", fmt.Errorf("invalid function call format: missing 'name(...)'. Got: %s", text)
 	}
 
-	functionName = strings.TrimSpace(text[:open])
-	if functionName == "" || !regexp.MustCompile(`^\w+$`).MatchString(functionName) {
-		return "", "", fmt.Errorf("invalid function call format: invalid function name. Got: %s", text)
+	start := loc[0]
+	nameStart := loc[2]
+	nameEnd := loc[3]
+	functionName = text[nameStart:nameEnd]
+
+	open := strings.Index(text[start:], "(")
+	if open < 0 {
+		return "", "", fmt.Errorf("invalid function call format: missing '(' . Got: %s", text)
 	}
+	open = start + open
 
 	rest := strings.TrimSpace(text[open+1:])
 	if rest == "" {
 		return functionName, "", nil
 	}
 
-	if strings.HasSuffix(text, ")") {
-		rest = strings.TrimSuffix(rest, ")")
+	if close := strings.LastIndex(rest, ")"); close >= 0 {
+		rest = rest[:close]
 	}
 	return functionName, rest, nil
 }

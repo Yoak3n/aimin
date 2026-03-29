@@ -8,20 +8,29 @@ import (
 )
 
 func extractQuestionAndThoughts(messages []schema.OpenAIMessage) (q string, tsj string) {
-	ts := make([]string, 0)
-	qed := false
-	for _, m := range messages {
-		switch m.Role {
-		case schema.OpenAIMessageRoleUser:
-			if qed {
-				continue
-			}
-			q = strings.TrimSpace(helper.ExtractContentByTag(m.Content, "question"))
-			qed = true
-		case schema.OpenAIMessageRoleAssistant:
-			ts = append(ts, strings.TrimSpace(helper.ExtractContentByTag(m.Content, "thought")))
+	lastQuestionIdx := -1
+	for i, m := range messages {
+		if m.Role != schema.OpenAIMessageRoleUser {
+			continue
+		}
+		candidate := strings.TrimSpace(helper.ExtractContentByTag(m.Content, "question"))
+		if candidate != "" {
+			q = candidate
+			lastQuestionIdx = i
 		}
 	}
-	tsj = strings.Join(ts, "")
+
+	ts := make([]string, 0)
+	for i := lastQuestionIdx + 1; i >= 0 && i < len(messages); i++ {
+		m := messages[i]
+		if m.Role != schema.OpenAIMessageRoleAssistant {
+			continue
+		}
+		t := strings.TrimSpace(helper.ExtractContentByTag(m.Content, "thought"))
+		if t != "" {
+			ts = append(ts, t)
+		}
+	}
+	tsj = strings.Join(ts, "\n")
 	return q, tsj
 }

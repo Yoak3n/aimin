@@ -91,16 +91,9 @@ func (c *ConversationAgent) trimToMaxTurns() {
 }
 
 func formatCompactAssistant(thought string, finalAnswer string) string {
-	thought = strings.TrimSpace(thought)
 	finalAnswer = strings.TrimSpace(finalAnswer)
-	if thought == "" && finalAnswer == "" {
+	if finalAnswer == "" {
 		return ""
 	}
-	if thought == "" {
-		return fmt.Sprintf("<final_answer>%s</final_answer>", finalAnswer)
-	}
-	if finalAnswer == "" {
-		return fmt.Sprintf("<thought>%s</thought>", thought)
-	}
-	return fmt.Sprintf("<thought>%s</thought>\n<final_answer>%s</final_answer>", thought, finalAnswer)
+	return fmt.Sprintf("<final_answer>%s</final_answer>", finalAnswer)
 }

@@ -86,7 +86,6 @@ func makeFileSpecMap(choose ContextChoice) map[string]FileSpec {
 		setRequired(ret, "BOOT.md")
 		setRequired(ret, "TOOLS.md")
 		setRequired(ret, "MEMORY.md")
-		setRequired(ret, "BOOTSTRAP.md")
 		// 从今天开始往前算的天数
 		for _, spec := range diaryFiles() {
 			ret[spec.Name] = spec
@@ -96,7 +95,6 @@ func makeFileSpecMap(choose ContextChoice) map[string]FileSpec {
 		setRequired(ret, "SOUL.md")
 		setRequired(ret, "USER.md")
 		setRequired(ret, "TASKS.md")
-		setRequired(ret, "HEARTBEAT.md")
 		setRequired(ret, "BOOT.md")
 		setRequired(ret, "TOOLS.md")
 		// 从今天开始往前算的天数

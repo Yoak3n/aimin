@@ -48,6 +48,7 @@ func NewConfiguration() *Configuration {
 func GlobalConfiguration() *Configuration {
 	once.Do(func() {
 		conf = NewConfiguration()
+		conf.Save()
 	})
 	return conf
 }
