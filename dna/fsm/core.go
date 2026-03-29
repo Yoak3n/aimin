@@ -2,8 +2,6 @@ package fsm
 
 import (
 	"fmt"
-
-	"github.com/Yoak3n/aimin/dna/attribute"
 )
 
 // StateType 定义状态类型
@@ -38,22 +36,6 @@ type State interface {
 
 	// IsInterruptible 是否允许被高优先级任务打断
 	IsInterruptible() bool
-}
-
-// Context 运行上下文，用于传递数据
-type Context struct {
-	Data          map[string]interface{}
-	Current       string
-	OnStateChange func(string)
-	Attr          *attribute.MinAttribute
-}
-
-func NewContext() *Context {
-	return &Context{
-		Data:    make(map[string]interface{}),
-		Current: "",
-		Attr:    attribute.NewMinAttribute(),
-	}
 }
 
 // FSM 有限状态机核心

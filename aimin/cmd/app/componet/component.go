@@ -4,14 +4,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Yoak3n/aimin/dna/attribute"
 	"github.com/Yoak3n/aimin/dna/decision"
 	"github.com/Yoak3n/aimin/dna/fsm"
 )
 
 type Component struct {
 	fsm  *fsm.FSM
-	attr *attribute.MinAttribute
 	log  chan string
 }
 
