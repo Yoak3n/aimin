@@ -5,5 +5,6 @@ test/
 *.txt
 *.log
 .env*
+sp.md
 config.json
 default_workspace/
