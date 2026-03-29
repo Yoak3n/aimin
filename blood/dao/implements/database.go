@@ -18,16 +18,16 @@ import (
 // Database 数据库连接管理器
 type Database struct {
 	PostgresDB *gorm.DB
-	NeuroDB    *neo4j.NeuroDB
-	Config     *config.DatabaseConfig
+	NeuroDB    *neo4j.Neo4jDB
+	Config     *config.PostgresConfig
 }
 
 // NewDatabase 创建新的数据库连接实例
 func NewDatabase() (*Database, error) {
 	conf := config.GlobalConfiguration()
-	neuroDB := neo4j.NewNeuroDB(7687)
+	neuroDB := neo4j.NewNeuroDB()
 	db := &Database{
-		Config:  conf.Database,
+		Config:  conf.Database.Postgres,
 		NeuroDB: neuroDB,
 	}
 	err := CreateDatabase(db.Config)
@@ -137,7 +137,7 @@ func (d *Database) GetPostgresSQL() *gorm.DB {
 	return d.PostgresDB
 }
 
-func (d *Database) GetNeuroDB() *neo4j.NeuroDB {
+func (d *Database) GetNeuroDB() *neo4j.Neo4jDB {
 	return d.NeuroDB
 }
 
@@ -157,7 +157,7 @@ func (d *Database) AutoMigrate(models ...interface{}) error {
 }
 
 // CreateDatabase 创建数据库（如果不存在）
-func CreateDatabase(config *config.DatabaseConfig) error {
+func CreateDatabase(config *config.PostgresConfig) error {
 	// 连接到postgres数据库来创建目标数据库
 	tempConfig := *config
 	tempConfig.DBName = "postgres"
@@ -207,7 +207,7 @@ func CreateDatabase(config *config.DatabaseConfig) error {
 }
 
 // DropDatabase 删除数据库
-func DropDatabase(config *config.DatabaseConfig) error {
+func DropDatabase(config *config.PostgresConfig) error {
 	// 连接到postgres数据库来删除目标数据库
 	tempConfig := *config
 	tempConfig.DBName = "postgres"

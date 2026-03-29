@@ -17,17 +17,15 @@ func Glob(ctx *Context) string {
 		return "args is empty"
 	}
 
-	ps := strings.SplitN(p, ",", 2)
-	pattern := strings.TrimSpace(ps[0])
+	args := parseArgs(p)
+	pattern := strings.TrimSpace(firstNonEmpty(args["pattern"], args["_0"]))
 	if pattern == "" {
 		return fmt.Sprintf("invalid args format for Glob: %s", p)
 	}
 
 	root := "."
-	if len(ps) == 2 {
-		if v := strings.TrimSpace(ps[1]); v != "" {
-			root = v
-		}
+	if v := strings.TrimSpace(firstNonEmpty(args["root"], args["_1"])); v != "" {
+		root = v
 	}
 
 	results, err := globInDir(root, pattern, 2000)

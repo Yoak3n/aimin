@@ -11,31 +11,31 @@ func FileOperation(ctx *Context) string {
 	if p == "" {
 		return "args is empty"
 	}
-	ps := strings.SplitN(p, ",", 3)
-	if len(ps) >= 2 {
-		op := strings.ToLower(strings.TrimSpace(ps[0]))
-		// path, err := resolveWorkspacePath(strings.TrimSpace(ps[1]))
-		// if err != nil {
-		// 	return fmt.Sprintf("resolve path failed: %s", err.Error())
-		// }
-		switch op {
-		case "read":
-			return ReadFile(strings.TrimSpace(ps[1]))
-		case "write":
-			if len(ps) < 3 {
-				return fmt.Sprintf("args %s is invalid", p)
-			}
-			return WriteFile(strings.TrimSpace(ps[1]), ps[2])
-		case "append":
-			if len(ps) < 3 {
-				return fmt.Sprintf("args %s is invalid", p)
-			}
-			return AppendFile(strings.TrimSpace(ps[1]), ps[2])
-		default:
-			return fmt.Sprintf("file operation %s not found", ps[0])
-		}
-	} else {
+	args := parseArgs(p)
+	op := strings.ToLower(strings.TrimSpace(firstNonEmpty(args["op"], args["action"], args["_0"])))
+	path := strings.TrimSpace(firstNonEmpty(args["path"], args["_1"]))
+	content := firstNonEmpty(args["content"], args["_2"])
+	if op == "" {
 		return fmt.Sprintf("args %s is invalid", p)
+	}
+	switch op {
+	case "read":
+		if path == "" {
+			return fmt.Sprintf("args %s is invalid", p)
+		}
+		return ReadFile(path)
+	case "write":
+		if path == "" || strings.TrimSpace(content) == "" {
+			return fmt.Sprintf("args %s is invalid", p)
+		}
+		return WriteFile(path, content)
+	case "append":
+		if path == "" || strings.TrimSpace(content) == "" {
+			return fmt.Sprintf("args %s is invalid", p)
+		}
+		return AppendFile(path, content)
+	default:
+		return fmt.Sprintf("file operation %s not found", op)
 	}
 }
 

@@ -18,13 +18,12 @@ func ShellCommand(ctx *Context) string {
 	if p == "" {
 		return "ERROR: args is empty"
 	}
-	ps := strings.SplitN(p, ",", 2)
-	if len(ps) != 2 {
+	args := parseArgs(p)
+	osType := strings.ToLower(strings.TrimSpace(firstNonEmpty(args["os_type"], args["os"], args["_0"])))
+	commandStr := strings.TrimSpace(firstNonEmpty(args["command"], args["_1"]))
+	if osType == "" || commandStr == "" {
 		return fmt.Sprintf("ERROR: invalid args format for ShellCommand: %s", p)
 	}
-
-	osType := strings.ToLower(strings.TrimSpace(ps[0]))
-	commandStr := strings.TrimSpace(ps[1])
 
 	switch osType {
 	case "windows":

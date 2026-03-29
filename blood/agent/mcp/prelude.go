@@ -43,3 +43,11 @@ func GrepTool() *Tool {
 		Action: tool.Grep,
 	}
 }
+
+func ManageMemoryTool() *Tool {
+	return &Tool{
+		Name:   "manage_memory",
+		Desc:   `Manage memory. args: action[,key=value...]. actions: read_long_term, write_long_term, read_daily, write_daily, search, recent_conversations, graph_get_node, graph_neighbors, graph_related, graph_search_nodes, graph_relations_by_link, graph_least_connected. eg: manage_memory(action="search",query="...")`,
+		Action: tool.ManageMemory,
+	}
+}

@@ -11,7 +11,7 @@ type OptionInterface interface {
 	Tag() string
 }
 
-func WithDatabaseConfig(config *DatabaseConfig) OptionInterface {
+func WithDatabaseConfig(config *Database) OptionInterface {
 	return config
 }
 
@@ -22,7 +22,7 @@ func WithLLMConfig(config *LLMConfig) OptionInterface {
 func DefaultConfiguration() *Configuration {
 	return &Configuration{
 		Workspace: DefaultWorkspace(),
-		Database:  DefaultDatabaseConfig(),
+		Database:  DefaultDatabase(),
 	}
 }
 
@@ -83,33 +83,57 @@ func normalizeConfiguration(cfg *Configuration) {
 		}
 	}
 	if cfg.Database == nil {
-		cfg.Database = DefaultDatabaseConfig()
+		cfg.Database = DefaultDatabase()
+	}
+	if cfg.Database.Postgres == nil {
+		cfg.Database.Postgres = DefaultDatabaseConfig()
 	} else {
-		if cfg.Database.Host == "" {
-			cfg.Database.Host = DefaultDatabaseConfig().Host
+		if cfg.Database.Postgres.Host == "" {
+			cfg.Database.Postgres.Host = DefaultDatabaseConfig().Host
 		}
-		if cfg.Database.Port == 0 {
-			cfg.Database.Port = DefaultDatabaseConfig().Port
+		if cfg.Database.Postgres.Port == 0 {
+			cfg.Database.Postgres.Port = DefaultDatabaseConfig().Port
 		}
-		if cfg.Database.User == "" {
-			cfg.Database.User = DefaultDatabaseConfig().User
+		if cfg.Database.Postgres.User == "" {
+			cfg.Database.Postgres.User = DefaultDatabaseConfig().User
 		}
-		if cfg.Database.Password == "" {
-			cfg.Database.Password = DefaultDatabaseConfig().Password
+		if cfg.Database.Postgres.Password == "" {
+			cfg.Database.Postgres.Password = DefaultDatabaseConfig().Password
 		}
-		if cfg.Database.DBName == "" {
-			cfg.Database.DBName = DefaultDatabaseConfig().DBName
+		if cfg.Database.Postgres.DBName == "" {
+			cfg.Database.Postgres.DBName = DefaultDatabaseConfig().DBName
 		}
-		if cfg.Database.SSLMode == "" {
-			cfg.Database.SSLMode = DefaultDatabaseConfig().SSLMode
+		if cfg.Database.Postgres.SSLMode == "" {
+			cfg.Database.Postgres.SSLMode = DefaultDatabaseConfig().SSLMode
 		}
-		if cfg.Database.TimeZone == "" {
-			cfg.Database.TimeZone = DefaultDatabaseConfig().TimeZone
+		if cfg.Database.Postgres.TimeZone == "" {
+			cfg.Database.Postgres.TimeZone = DefaultDatabaseConfig().TimeZone
 		}
-		if cfg.Database.Dimension == 0 {
-			cfg.Database.Dimension = DefaultDatabaseConfig().Dimension
+		if cfg.Database.Postgres.Dimension == 0 {
+			cfg.Database.Postgres.Dimension = DefaultDatabaseConfig().Dimension
 		}
 	}
+
+	if cfg.Database.Neo4j == nil {
+		cfg.Database.Neo4j = DefaultNeo4jConfig()
+	} else {
+		if cfg.Database.Neo4j.URI == "" {
+			cfg.Database.Neo4j.URI = DefaultNeo4jConfig().URI
+		}
+		if cfg.Database.Neo4j.Host == "" {
+			cfg.Database.Neo4j.Host = DefaultNeo4jConfig().Host
+		}
+		if cfg.Database.Neo4j.Port == 0 {
+			cfg.Database.Neo4j.Port = DefaultNeo4jConfig().Port
+		}
+		if cfg.Database.Neo4j.User == "" {
+			cfg.Database.Neo4j.User = DefaultNeo4jConfig().User
+		}
+		if cfg.Database.Neo4j.Password == "" {
+			cfg.Database.Neo4j.Password = DefaultNeo4jConfig().Password
+		}
+	}
+
 }
 
 func findConfigFilePath() (string, error) {

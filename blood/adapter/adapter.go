@@ -224,7 +224,7 @@ func (b *BaseAdapter) Embedding(text []string) ([][]float32, error) {
 	reqBody := map[string]any{
 		"model":      b.config.Model,
 		"input":      text,
-		"dimensions": config.GlobalConfiguration().Database.Dimension,
+		"dimensions": config.GlobalConfiguration().Database.Postgres.Dimension,
 	}
 
 	jsonData, err := json.Marshal(reqBody)

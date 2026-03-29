@@ -12,3 +12,5 @@ func GetCurrentMetacognitionRecords() ([]schema.MetacognitionTable, error) {
 	}
 	return records, nil
 }
+
+

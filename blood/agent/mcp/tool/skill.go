@@ -12,7 +12,8 @@ func ComplexTaskForSkill(ctx *Context) string {
 	if p == "" {
 		return "args is empty"
 	}
-	p = strings.TrimSpace(p)
+	args := parseArgs(p)
+	p = strings.TrimSpace(firstNonEmpty(args["task"], args["_0"]))
 	if p == "..." {
 		skill.GlobalSkillHUB().Active = ""
 		return "已清除当前激活技能"

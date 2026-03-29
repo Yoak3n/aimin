@@ -19,33 +19,26 @@ func Grep(ctx *Context) string {
 		return "args is empty"
 	}
 
-	ps := strings.SplitN(p, ",", 4)
-	pattern := strings.TrimSpace(ps[0])
+	args := parseArgs(p)
+	pattern := strings.TrimSpace(firstNonEmpty(args["pattern"], args["_0"]))
 	if pattern == "" {
 		return fmt.Sprintf("invalid args format for Grep: %s", p)
 	}
 
 	root := "."
-	if len(ps) >= 2 {
-		if v := strings.TrimSpace(ps[1]); v != "" {
-			root = v
-		}
+	if v := strings.TrimSpace(firstNonEmpty(args["root"], args["_1"])); v != "" {
+		root = v
 	}
 
-	fileGlob := ""
-	if len(ps) >= 3 {
-		fileGlob = strings.TrimSpace(ps[2])
-	}
+	fileGlob := strings.TrimSpace(firstNonEmpty(args["file_glob"], args["glob"], args["_2"]))
 
 	maxMatches := 200
-	if len(ps) == 4 {
-		if v := strings.TrimSpace(ps[3]); v != "" {
-			n, err := strconv.Atoi(v)
-			if err != nil || n < 1 {
-				return fmt.Sprintf("invalid max_matches: %s", v)
-			}
-			maxMatches = n
+	if v := strings.TrimSpace(firstNonEmpty(args["max_matches"], args["limit"], args["_3"])); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			return fmt.Sprintf("invalid max_matches: %s", v)
 		}
+		maxMatches = n
 	}
 
 	re, err := regexp.Compile(pattern)
