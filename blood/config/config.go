@@ -24,6 +24,7 @@ func DefaultConfiguration() *Configuration {
 	return &Configuration{
 		Workspace: DefaultWorkspace(),
 		Database:  DefaultDatabase(),
+		Internet:  DefaultInternet(),
 	}
 }
 
@@ -143,6 +144,10 @@ func normalizeConfiguration(cfg *Configuration) {
 		if cfg.Database.Neo4j.Password == "" {
 			cfg.Database.Neo4j.Password = DefaultNeo4jConfig().Password
 		}
+	}
+
+	if cfg.Internet == nil {
+		cfg.Internet = DefaultInternet()
 	}
 
 }

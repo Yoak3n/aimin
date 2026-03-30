@@ -1,10 +1,12 @@
 package decision
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
 	"strings"
+	"time"
 
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
@@ -13,6 +15,7 @@ import (
 	"github.com/Yoak3n/aimin/dna/action"
 	"github.com/Yoak3n/aimin/dna/fsm"
 	"github.com/Yoak3n/aimin/dna/persist"
+	"github.com/Yoak3n/aimin/hand/internet/search/duckduckgo"
 )
 
 func NewExploreNode(check func(ctx *fsm.Context) bool) *fsm.WorkState {
@@ -28,15 +31,17 @@ func makeExploreAction() fsm.WorkAction {
 	chosenType := ""
 	chosenName := ""
 	var chosenDegree int64
+	chosenStrategy := ExploreStrategyWebSearch
 	return func(ctx *fsm.Context) string {
 		ctx.Attr.AddEnergy(-2)
 		for i := progress; i < 4; i++ {
 			switch i {
 			case 1:
-				question, chosenType, chosenName, chosenDegree = createExploreQuestionFromGraph(ctx, 10)
+				chosenStrategy = chooseExploreStrategy()
+				question, chosenType, chosenName, chosenDegree = createExploreQuestionFromGraph(ctx, 10, chosenStrategy)
 				progress++
 			case 2:
-				answer = askForAnswer(question)
+				answer = askForAnswer(question, chosenStrategy)
 				progress++
 			case 3:
 				handleExploreAnswer(answer)
@@ -45,6 +50,7 @@ func makeExploreAction() fsm.WorkAction {
 						"node_type": chosenType,
 						"node_name": chosenName,
 						"degree":    chosenDegree,
+						"strategy":  string(chosenStrategy),
 						"question":  question,
 						"answer":    compactOneLine(strings.Join(answer, " | "), 400),
 					})
@@ -56,7 +62,22 @@ func makeExploreAction() fsm.WorkAction {
 	}
 }
 
-func createExploreQuestionFromGraph(ctx *fsm.Context, candidateLimit int) (string, string, string, int64) {
+type ExploreStrategy string
+
+const (
+	ExploreStrategyWebSearch ExploreStrategy = "web_search"
+	ExploreStrategyAskUser   ExploreStrategy = "ask_user"
+)
+
+func chooseExploreStrategy() ExploreStrategy {
+	choice := rand.IntN(3)
+	if choice >= 2 {
+		return ExploreStrategyAskUser
+	}
+	return ExploreStrategyWebSearch
+}
+
+func createExploreQuestionFromGraph(ctx *fsm.Context, candidateLimit int, strategy ExploreStrategy) (string, string, string, int64) {
 	if candidateLimit <= 0 {
 		candidateLimit = 10
 	}
@@ -75,17 +96,23 @@ func createExploreQuestionFromGraph(ctx *fsm.Context, candidateLimit int) (strin
 	if ctx != nil && ctx.Persist != nil {
 		noise = exploreNoise(ctx.Persist, 1200, 18)
 	}
-	question := generateExploreQuestionByLLM(chosen.Type, chosen.Name, chosen.Degree, noise)
+	question := generateExploreQuestionByLLM(chosen.Type, chosen.Name, chosen.Degree, noise, strategy)
 	if strings.TrimSpace(question) == "" {
 		question = fmt.Sprintf("请探索图谱节点：%s:%s（连接度=%d）", chosen.Type, chosen.Name, chosen.Degree)
 	}
-	logger.Logger.Infof("[Explore] Question: %s", question)
+	logger.Logger.Infof("[Explore] Strategy=%s Question: %s", strategy, question)
 	return question, chosen.Type, chosen.Name, chosen.Degree
 }
 
-func generateExploreQuestionByLLM(nodeType string, nodeName string, degree int64, noise string) string {
+func generateExploreQuestionByLLM(nodeType string, nodeName string, degree int64, noise string, strategy ExploreStrategy) string {
 	user := fmt.Sprintf("目标节点：%s:%s；连接度：%d。\n噪声上下文（最近探索记录压缩）：\n%s", nodeType, nodeName, degree, strings.TrimSpace(noise))
-	systemPrompt := "你是一个智能体的探索问题生成器。请基于给定目标节点生成一个中文探索问题/任务指令，要求：1) 只输出一句话，不要换行；2) 风格有随机性（可在提问角度/任务形式上变化）；3) 可参考噪声上下文调整角度，但不要复述上下文；4) 不要输出任何额外解释。"
+	systemPrompt := ""
+	switch strategy {
+	case ExploreStrategyWebSearch:
+		systemPrompt = "你是搜索查询生成器。请基于给定目标节点生成一个适合在搜索引擎直接搜索的中文查询串，要求：1) 只输出一行，不要换行；2) 不要写成问句，不要带任何解释；3) 尽量用关键词短语，必要时用空格分隔；4) 必须包含节点名，尽量包含节点类型或等价领域词；5) 可参考噪声上下文挑选更有信息量的限定词，但不要复述上下文。"
+	default:
+		systemPrompt = "你是一个智能体的探索提问生成器。请基于给定目标节点生成一句自然得体的中文提问/任务指令，用于向用户请教或请用户补充信息，要求：1) 只输出一句话，不要换行；2) 语气礼貌、明确且易回答；3) 风格有随机性（可在提问角度/任务形式上变化）；4) 可参考噪声上下文调整角度，但不要复述上下文；5) 不要输出任何额外解释。"
+	}
 	out, err := llm.Chat([]schema.OpenAIMessage{{Role: schema.OpenAIMessageRoleUser, Content: user}}, systemPrompt)
 	if err != nil {
 		return ""
@@ -170,13 +197,74 @@ func compactOneLine(s string, max int) string {
 	return s
 }
 
-func askForAnswer(question string) []string {
-	choice := rand.IntN(3)
-	if choice >= 2 {
+func askForAnswer(question string, strategy ExploreStrategy) []string {
+	if strategy == ExploreStrategyAskUser {
 		return action.ProactiveAsk(question)
 	}
 	// 网络搜索
-	return []string{"回答1", "回答2", "回答3"}
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+
+	res, err := duckduckgo.Search(ctx, question, &duckduckgo.Options{
+		Timeout: 20 * time.Second,
+	})
+	if err != nil {
+		return []string{fmt.Sprintf("[DuckDuckGo][错误] %v", err)}
+	}
+
+	out := make([]string, 0, 16)
+	if s := strings.TrimSpace(res.Heading); s != "" {
+		out = append(out, "[主题] "+s)
+	}
+	if s := strings.TrimSpace(res.AbstractText); s != "" {
+		out = append(out, "[摘要] "+s)
+	}
+	if s := strings.TrimSpace(res.Answer); s != "" {
+		t := strings.TrimSpace(res.AnswerType)
+		if t != "" {
+			out = append(out, "[答案/"+t+"] "+s)
+		} else {
+			out = append(out, "[答案] "+s)
+		}
+	}
+	if s := strings.TrimSpace(res.Definition); s != "" {
+		out = append(out, "[定义] "+s)
+	}
+
+	if len(res.Results) > 0 {
+		out = append(out, "[结果]")
+		n := 5
+		if len(res.Results) < n {
+			n = len(res.Results)
+		}
+		for i := 0; i < n; i++ {
+			it := res.Results[i]
+			line := strings.TrimSpace(it.Text)
+			if line != "" {
+				out = append(out, fmt.Sprintf("- %s", line))
+			}
+		}
+	}
+
+	if len(res.RelatedTopics) > 0 {
+		out = append(out, "[相关]")
+		n := 5
+		if len(res.RelatedTopics) < n {
+			n = len(res.RelatedTopics)
+		}
+		for i := 0; i < n; i++ {
+			it := res.RelatedTopics[i]
+			line := strings.TrimSpace(it.Text)
+			if line != "" {
+				out = append(out, fmt.Sprintf("- %s", line))
+			}
+		}
+	}
+
+	if len(out) == 0 {
+		return []string{"[DuckDuckGo] 未返回可用内容"}
+	}
+	return out
 }
 
 func handleExploreAnswer(answer []string) bool {
