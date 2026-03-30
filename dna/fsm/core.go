@@ -147,6 +147,8 @@ func (f *FSM) Update() {
 	// 3. 处理状态转换
 	if nextStateID == Done {
 		f.handleStateDone()
+	} else if nextStateID == Interrupt {
+		return
 	} else if nextStateID != "" && nextStateID != f.currentState.ID() {
 		f.changeState(nextStateID)
 	}

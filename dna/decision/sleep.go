@@ -11,6 +11,7 @@ func NewSleepNode() *fsm.WorkState {
 		v, ok := ctx.Data[rootRouterKey]
 		return ok && v == Sleep
 	})
+	node.SetDoneHook(Sleep, Explore, Watch)
 
 	return node
 }
@@ -18,7 +19,6 @@ func NewSleepNode() *fsm.WorkState {
 func makeSleepNode() fsm.WorkAction {
 	progress := 1
 	return func(ctx *fsm.Context) string {
-		ctx.Data[ExploreChoice] = ""
 		for i := progress; i < 6; i++ {
 			switch i {
 			case 1:
@@ -35,7 +35,7 @@ func makeSleepNode() fsm.WorkAction {
 				progress++
 			case 5:
 				time.Sleep(time.Second)
-				ctx.Attr.SetEnergy(ctx.Attr.Energy + 10)
+				ctx.Attr.AddEnergy(10)
 				return fsm.Done
 			}
 		}

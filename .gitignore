@@ -7,4 +7,5 @@ test/
 .env*
 sp.md
 config.json
+*.yaml
 default_workspace/

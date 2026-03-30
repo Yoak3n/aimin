@@ -54,10 +54,41 @@ func (m *MinAttribute) SetOpenness(v float64) {
 	m.saveCacheLocked()
 }
 
+func (m *MinAttribute) AddCuriosity(delta float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.Curiosity = clamp01To100(m.Curiosity + delta)
+	m.saveCacheLocked()
+}
+
+func (m *MinAttribute) AddEnergy(delta float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.Energy = clamp01To100(m.Energy + delta)
+	m.saveCacheLocked()
+}
+
+func (m *MinAttribute) AddOpenness(delta float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.Openness = clamp01To100(m.Openness + delta)
+	m.saveCacheLocked()
+}
+
 func (m *MinAttribute) SaveCache() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.saveCacheLocked()
+}
+
+func clamp01To100(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 100 {
+		return 100
+	}
+	return v
 }
 
 func (m *MinAttribute) saveCacheLocked() {

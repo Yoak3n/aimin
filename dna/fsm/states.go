@@ -1,6 +1,9 @@
 package fsm
 
-import "fmt"
+import (
+	"fmt"
+	"math/rand"
+)
 
 // BaseState 基础状态实现，减少样板代码
 type BaseState struct {
@@ -9,6 +12,8 @@ type BaseState struct {
 	stateType     StateType
 	interruptible bool
 	checkEntry    func(*Context) bool
+	doneStateID   string
+	doneOpposites []string
 }
 
 const (
@@ -42,6 +47,25 @@ func (b *BaseState) OnResume(ctx *Context) {
 }
 func (b *BaseState) OnUpdate(ctx *Context) string { return "" } // 默认保持
 
+func (b *BaseState) SetDoneHook(doneStateID string, oppositeStateIDs ...string) {
+	b.doneStateID = doneStateID
+	b.doneOpposites = oppositeStateIDs
+}
+
+func (b *BaseState) MarkDone(ctx *Context) {
+	if ctx == nil {
+		return
+	}
+	stateID := b.doneStateID
+	if stateID == "" {
+		stateID = b.id
+	}
+	if stateID == "" {
+		return
+	}
+	ctx.MarkStateDone(stateID, b.doneOpposites...)
+}
+
 // WorkAction 定义工作状态的具体行为逻辑
 // 返回值: nextStateID (""表示继续当前状态, "__DONE__"表示结束, 其他值为跳转目标)
 type WorkAction func(ctx *Context) string
@@ -64,6 +88,7 @@ func NewWorkState(id, name string, action WorkAction, check func(ctx *Context) b
 			stateType:     WorkStateType,
 			interruptible: true, // 允许打断
 			checkEntry:    check,
+			doneStateID:   id,
 		},
 		action: action,
 	}
@@ -71,8 +96,13 @@ func NewWorkState(id, name string, action WorkAction, check func(ctx *Context) b
 
 func (w *WorkState) OnUpdate(ctx *Context) string {
 	if w.action != nil {
-		return w.action(ctx)
+		result := w.action(ctx)
+		if result == Done {
+			w.BaseState.MarkDone(ctx)
+		}
+		return result
 	}
+	w.BaseState.MarkDone(ctx)
 	return Done
 }
 
@@ -93,6 +123,7 @@ func NewTaskState(id, name string, action func(ctx *Context)) *TaskState {
 			name:          name,
 			stateType:     TaskStateType,
 			interruptible: false, // 任务不可被打断
+			doneStateID:   id,
 		},
 		action: action,
 	}
@@ -103,6 +134,7 @@ func (t *TaskState) OnUpdate(ctx *Context) string {
 	if t.action != nil {
 		t.action(ctx)
 	}
+	t.BaseState.MarkDone(ctx)
 	return Done // 任务通常是一次性的，执行完即结束
 }
 
@@ -313,4 +345,31 @@ func (c *CompositeState) OnResume(ctx *Context) {
 		// 但接口里只有 OnResume。
 		c.children[c.current].OnResume(ctx)
 	}
+}
+
+func WeightedIndex(weights []float64) int {
+	if len(weights) == 0 {
+		return -1
+	}
+	total := 0.0
+	for _, w := range weights {
+		if w > 0 {
+			total += w
+		}
+	}
+	if total <= 0 {
+		return rand.Intn(len(weights))
+	}
+	r := rand.Float64() * total
+	acc := 0.0
+	for i, w := range weights {
+		if w <= 0 {
+			continue
+		}
+		acc += w
+		if r < acc {
+			return i
+		}
+	}
+	return len(weights) - 1
 }

@@ -23,7 +23,32 @@ func newRootNode() *fsm.CompositeState {
 }
 
 func rootNodeSelector(ctx *fsm.Context, states []fsm.State) int {
-	idx := rand.Intn(len(states))
+	energy := clamp01(ctx.Attr.Energy / 100)
+	weights := make([]float64, 0, len(states))
+	for _, st := range states {
+		w := 0.05
+		switch st.ID() {
+		case Sleep:
+			w += clamp01((0.6 - energy) / 0.6)
+			w *= 1 + ctx.GetStateBias(Sleep)
+			if ctx.LastDoneState() == Sleep {
+				w *= 0.6
+			}
+		case Idle:
+			w += energy
+			w *= 1 + ctx.GetStateBias(Idle)
+			if ctx.LastDoneState() == Idle {
+				w *= 0.8
+			}
+		default:
+			w += 0.1
+		}
+		weights = append(weights, w)
+	}
+	idx := fsm.WeightedIndex(weights)
+	if idx < 0 || idx >= len(states) {
+		idx = rand.Intn(len(states))
+	}
 	ctx.Data[rootRouterKey] = states[idx].ID()
 	return idx
 }

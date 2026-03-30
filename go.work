@@ -6,4 +6,5 @@ use (
 	./dna
 	./face
 	./nerve
+	./hand
 )
