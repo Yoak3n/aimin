@@ -47,3 +47,10 @@ func (d *Database) GetAllConversations() ([]schema.ConversationRecord, error) {
 	err := db.Order("updated_at desc").Find(&records).Error
 	return records, err
 }
+
+func (d *Database) GetRecentConversations(limit int) ([]schema.ConversationRecord, error) {
+	db := d.GetPostgresSQL()
+	var records []schema.ConversationRecord
+	err := db.Order("updated_at desc").Limit(limit).Find(&records).Error
+	return records, err
+}

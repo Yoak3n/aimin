@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Yoak3n/aimin/blood/pkg/helper"
+	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/blood/schema"
 )
 
@@ -28,9 +30,32 @@ func NewConversationAgent(base *ReActAgent) *ConversationAgent {
 	if base == nil {
 		base = NewAgent()
 	}
+	recentConversations, err := helper.UseDB().GetRecentConversations(2)
+	if err != nil {
+		logger.Logger.Errorf("get recent conversations failed: %v", err)
+	}
+	messages := make([]schema.OpenAIMessage, 0, 16)
+	for i := len(recentConversations) - 1; i >= 0; i-- {
+		rec := recentConversations[i]
+		q := strings.TrimSpace(rec.Question)
+		a := strings.TrimSpace(rec.Answer)
+		if q == "" {
+			continue
+		}
+		messages = append(messages, schema.OpenAIMessage{
+			Role:    schema.OpenAIMessageRoleUser,
+			Content: fmt.Sprintf("<question>%s</question>", q),
+		})
+		if a != "" {
+			messages = append(messages, schema.OpenAIMessage{
+				Role:    schema.OpenAIMessageRoleAssistant,
+				Content: formatCompactAssistant("", a),
+			})
+		}
+	}
 	return &ConversationAgent{
 		Base:     base,
-		Messages: make([]schema.OpenAIMessage, 0, 16),
+		Messages: messages,
 		MaxTurns: 0,
 	}
 }
@@ -95,7 +120,7 @@ func (c *ConversationAgent) trimToMaxTurns() {
 	}
 	dropped := append([]schema.OpenAIMessage(nil), c.Messages[:len(c.Messages)-maxMessages]...)
 	c.Messages = append([]schema.OpenAIMessage(nil), c.Messages[len(c.Messages)-maxMessages:]...)
-	
+
 	c.maybeSilentFlushDailyMemory(dropped, maxMessages)
 }
 
