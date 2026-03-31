@@ -1,12 +1,12 @@
 package main
 
 import (
-	"github.com/Yoak3n/aimin/aimin/cmd/app/componet"
+	"github.com/Yoak3n/aimin/aimin/app/componet"
 	"github.com/Yoak3n/aimin/aimin/internal/service/router"
 	"github.com/Yoak3n/aimin/aimin/internal/service/ws"
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/dna/action"
-	"github.com/Yoak3n/aimin/face/conversation"
+	"github.com/Yoak3n/aimin/hand/interactive"
 )
 
 func init() {
@@ -16,8 +16,9 @@ func init() {
 	logger.Init()
 	logger.SetExternalHandler(hub.BroadcastLog)
 	action.RemoteAsk = hub.Ask
+	interactive.WSReplyBroadcast = hub.SendToClient
 
-	conversation.GetManager().SetReplyHandler(hub.SendReply)
+	// conversation.GetManager().SetReplyHandler(hub.SendReply)
 
 	c := componet.GetGlobalComponent()
 	c.FSM().SetOnStateChange(hub.BroadcastState)

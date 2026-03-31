@@ -3,50 +3,148 @@ package decision
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+	"sync/atomic"
+	"time"
 
-	"github.com/Yoak3n/aimin/blood/schema"
+	"github.com/Yoak3n/aimin/blood/agent"
+	schemaws "github.com/Yoak3n/aimin/blood/schema/ws"
 	"github.com/Yoak3n/aimin/dna/fsm"
+	"github.com/Yoak3n/aimin/hand/interactive"
 )
 
 type TaskType string
 
 const (
-	TaskDataKey                   = "task_data"
-	ConversationCreate   TaskType = "conversation_create"
-	ConversationContinue TaskType = "conversation_continue"
+	TaskDataKey  = "task_data"
+	TaskQueueKey = "task_queue"
 )
 
 func NewTaskState() fsm.State {
-	return fsm.NewTaskState(Task, Task, executeTask)
+	return fsm.NewTaskState(Task, Task, makeTaskAction())
 }
 
-func executeTask(ctx *fsm.Context) {
-	if d, exist := ctx.Data[TaskDataKey]; exist {
-		// TODO: 根据任务类型执行不同的任务，需要有个地方传入任务数据
-		data, ok := d.(fsm.TaskData)
-		if ok {
-			switch data.Type {
-			case string(ConversationCreate):
-				// conversationId := util.RandomIdWithPrefix("conversation")
-				// action.EntryConversationTask(data.Payload.(string), conversationId, data.ID)
-			case string(ConversationContinue):
-				var payload schema.ConversationContinuePayload
-				if p, ok := data.Payload.(schema.ConversationContinuePayload); ok {
-					payload = p
-				} else {
-					bytes, err := json.Marshal(data.Payload)
-					if err != nil {
-						fmt.Println("Error marshaling payload:", err)
+func makeTaskAction() func(ctx *fsm.Context) string {
+	idleTimeout := 5 * time.Minute
+	var lastActivity time.Time
+	var busy int32
+	var started bool
+	var stopCh chan struct{}
+	var questionCh chan fsm.TaskData
+
+	startWorker := func() {
+		if started {
+			return
+		}
+		started = true
+		stopCh = make(chan struct{})
+		questionCh = make(chan fsm.TaskData, 32)
+		lastActivity = time.Now()
+
+		go func() {
+			var conv *agent.ConversationAgent
+			var convID string
+			var convFrom string
+
+			for {
+				select {
+				case <-stopCh:
+					return
+				case td, ok := <-questionCh:
+					if !ok {
 						return
 					}
-					err = json.Unmarshal(bytes, &payload)
+					q, ok := td.Payload.(string)
+					q = strings.TrimSpace(q)
+					if !ok || q == "" {
+						continue
+					}
+
+					if conv == nil || convID != td.ID || convFrom != td.From {
+						convID = td.ID
+						convFrom = td.From
+						conv = interactive.NewConversationTask(td.ID, td.From)
+					}
+
+					atomic.StoreInt32(&busy, 1)
+					_, err := conv.Ask(q)
+					atomic.StoreInt32(&busy, 0)
 					if err != nil {
-						fmt.Println("Error unmarshaling payload:", err)
-						return
+						msg := schemaws.NewReplyMessage(schemaws.ReplyStatusFinish, td.ID, fmt.Sprintf("[错误] %v", err))
+						b, _ := json.Marshal(msg)
+						if interactive.WSReplyBroadcast != nil {
+							interactive.WSReplyBroadcast(td.From, b)
+						}
 					}
 				}
-				// action.EntryConversationTask(payload.Question, payload.ConversationId, data.ID)
+			}
+		}()
+	}
+
+	appendTask := func(ctx *fsm.Context, td fsm.TaskData) {
+		if ctx == nil {
+			return
+		}
+		v := ctx.Data[TaskQueueKey]
+		if q, ok := v.([]fsm.TaskData); ok && q != nil {
+			ctx.Data[TaskQueueKey] = append(q, td)
+			return
+		}
+		ctx.Data[TaskQueueKey] = []fsm.TaskData{td}
+	}
+
+	return func(ctx *fsm.Context) string {
+		startWorker()
+
+		if ctx != nil {
+			if v, ok := ctx.Data[TaskDataKey]; ok {
+				if td, ok := v.(fsm.TaskData); ok {
+					appendTask(ctx, td)
+				}
+				delete(ctx.Data, TaskDataKey)
 			}
 		}
+
+		var q []fsm.TaskData
+		if ctx != nil {
+			if v, ok := ctx.Data[TaskQueueKey]; ok {
+				if qq, ok := v.([]fsm.TaskData); ok {
+					q = qq
+				}
+			}
+		}
+
+	drain:
+		for len(q) > 0 {
+			td := q[0]
+			q = q[1:]
+			select {
+			case questionCh <- td:
+				lastActivity = time.Now()
+			default:
+				q = append([]fsm.TaskData{td}, q...)
+				break drain
+			}
+		}
+
+		if ctx != nil {
+			if len(q) > 0 {
+				ctx.Data[TaskQueueKey] = q
+			} else {
+				delete(ctx.Data, TaskQueueKey)
+			}
+		}
+
+		if atomic.LoadInt32(&busy) == 0 && time.Since(lastActivity) > idleTimeout {
+			if stopCh != nil {
+				close(stopCh)
+			}
+			if ctx != nil {
+				delete(ctx.Data, TaskDataKey)
+				delete(ctx.Data, TaskQueueKey)
+			}
+			return fsm.Done
+		}
+		return fsm.Interrupt
 	}
 }

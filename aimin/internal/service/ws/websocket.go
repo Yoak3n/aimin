@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Yoak3n/aimin/aimin/cmd/app/componet"
+	"github.com/Yoak3n/aimin/aimin/app/componet"
 	"github.com/Yoak3n/aimin/blood/schema"
 	"github.com/Yoak3n/aimin/blood/schema/ws"
 	"github.com/Yoak3n/aimin/dna/fsm"
@@ -22,12 +22,14 @@ type QuestionRequest struct {
 }
 
 type WebSocketHub struct {
+	clientsMu  sync.RWMutex
 	clients    map[string]*Client
 	register   chan *Client
 	unregister chan string
 	broadcast  chan []byte
+	// 任务发送通道
 	Tasks      chan schema.TaskData
-	Answer     chan string
+	AnswerChan chan string
 	AskChan    chan *QuestionRequest
 	State      chan string
 }
@@ -58,95 +60,23 @@ func UseWebSocketHub() *WebSocketHub {
 
 func NewWebSocketHub() *WebSocketHub {
 	return &WebSocketHub{
+		clientsMu:  sync.RWMutex{},
 		clients:    make(map[string]*Client),
 		register:   make(chan *Client),
 		unregister: make(chan string),
 		broadcast:  make(chan []byte),
-		Tasks:      make(chan schema.TaskData),
-		Answer:     make(chan string),
+		Tasks:      make(chan schema.TaskData, 100),
+		AnswerChan: make(chan string),
 		AskChan:    make(chan *QuestionRequest),
-		State:      make(chan string),
+		State:      make(chan string, 1000),
 	}
 }
 
 func (wh *WebSocketHub) Run() {
 	go wh.sendTask()
-	var pendingQuestions []*QuestionRequest
-	var currentQuestion *QuestionRequest
+	pendingQuestions := make([]*QuestionRequest, 0, 100)
+	go wh.handle(pendingQuestions)
 
-	for {
-		select {
-		case client := <-wh.register:
-			wh.clients[client.id] = client
-			log.Printf("New connection with %d clients\n", len(wh.clients))
-			// Attempt to send current or pending question to the new client
-			if currentQuestion != nil {
-				wh.sendQuestionToClient(currentQuestion, client)
-			} else if len(pendingQuestions) > 0 {
-				currentQuestion = pendingQuestions[0]
-				pendingQuestions = pendingQuestions[1:]
-				wh.sendQuestion(currentQuestion)
-			}
-
-		case id := <-wh.unregister:
-			if client, ok := wh.clients[id]; ok {
-				cl := ws.WebsocketMessage{
-					Action: ws.CloseMessage,
-					Data:   ws.CloseMessage,
-				}
-				client.mu.Lock()
-				client.conn.WriteJSON(cl)
-				delete(wh.clients, id)
-				client.conn.Close()
-				client.mu.Unlock()
-				log.Printf("Client disconnected with %d clients\n", len(wh.clients))
-			}
-		case message := <-wh.broadcast:
-			for k, client := range wh.clients {
-				if err := client.conn.WriteMessage(websocket.TextMessage, message); err != nil {
-					client.conn.Close()
-					delete(wh.clients, k)
-				}
-			}
-		case req := <-wh.AskChan:
-			pendingQuestions = append(pendingQuestions, req)
-			if currentQuestion == nil && len(wh.clients) > 0 {
-				currentQuestion = pendingQuestions[0]
-				pendingQuestions = pendingQuestions[1:]
-				wh.sendQuestion(currentQuestion)
-			}
-		case answer := <-wh.Answer:
-			if currentQuestion != nil {
-				// Non-blocking send to avoid deadlock if receiver is gone
-				select {
-				case currentQuestion.AnswerCh <- answer:
-				default:
-				}
-				currentQuestion = nil
-				// Send next question if any
-				if len(pendingQuestions) > 0 && len(wh.clients) > 0 {
-					currentQuestion = pendingQuestions[0]
-					pendingQuestions = pendingQuestions[1:]
-					wh.sendQuestion(currentQuestion)
-				}
-			}
-		case state := <-wh.State:
-			msg := ws.WebsocketMessage{
-				Action: ws.StateMessage,
-				Data:   state,
-			}
-			buf, _ := json.Marshal(msg)
-			for k, client := range wh.clients {
-				client.mu.Lock()
-				if err := client.conn.WriteMessage(websocket.TextMessage, buf); err != nil {
-					log.Println("Error broadcasting state to client:", err)
-					client.conn.Close()
-					delete(wh.clients, k)
-				}
-				client.mu.Unlock()
-			}
-		}
-	}
 }
 
 func (wh *WebSocketHub) sendQuestion(req *QuestionRequest) {
@@ -157,10 +87,21 @@ func (wh *WebSocketHub) sendQuestion(req *QuestionRequest) {
 	buf, _ := json.Marshal(msg)
 	// Broadcast to all clients (or specific logic if needed)
 	// Currently using broadcast mechanism within Hub logic
+	wh.clientsMu.RLock()
+	ids := make([]string, 0, len(wh.clients))
+	clients := make([]*Client, 0, len(wh.clients))
 	for k, client := range wh.clients {
+		ids = append(ids, k)
+		clients = append(clients, client)
+	}
+	wh.clientsMu.RUnlock()
+	for i, client := range clients {
+		k := ids[i]
 		if err := client.conn.WriteMessage(websocket.TextMessage, buf); err != nil {
 			client.conn.Close()
+			wh.clientsMu.Lock()
 			delete(wh.clients, k)
+			wh.clientsMu.Unlock()
 		}
 	}
 }
@@ -178,9 +119,14 @@ func (wh *WebSocketHub) sendQuestionToClient(req *QuestionRequest, client *Clien
 }
 
 func (wh *WebSocketHub) Register(id string, conn *websocket.Conn) {
-	if k, ok := wh.clients[id]; ok {
-		k.conn.Close()
+	wh.clientsMu.Lock()
+	existing, ok := wh.clients[id]
+	if ok {
 		delete(wh.clients, id)
+	}
+	wh.clientsMu.Unlock()
+	if ok {
+		existing.conn.Close()
 	}
 	client := &Client{
 		id:   id,
@@ -198,6 +144,7 @@ func (wh *WebSocketHub) healthCheck(client *Client) {
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
+		wh.clientsMu.RLock()
 		client.mu.RLock()
 		last := client.last
 		now := time.Now().Unix()
@@ -211,6 +158,7 @@ func (wh *WebSocketHub) healthCheck(client *Client) {
 		}
 		client.conn.WriteJSON(pingMessage)
 		client.mu.RUnlock()
+		wh.clientsMu.RUnlock()
 	}
 }
 
@@ -249,35 +197,51 @@ func (wh *WebSocketHub) listen(id string, conn *websocket.Conn) {
 			wh.Tasks <- taskData
 		case ws.AnswerMessage:
 			if ans, ok := messageData.Data.(string); ok {
-				wh.Answer <- ans
+				wh.AnswerChan <- ans
 			} else {
 				// Try to convert if it's not directly a string (e.g. interface{})
-				wh.Answer <- fmt.Sprint(messageData.Data)
+				wh.AnswerChan <- fmt.Sprint(messageData.Data)
 			}
 		}
+		wh.clientsMu.RLock()
 		client, ok := wh.clients[id]
+		wh.clientsMu.RUnlock()
 		if ok {
 			client.mu.Lock()
 			client.last = time.Now().Unix()
 			client.mu.Unlock()
-			wh.clients[id] = client
 		}
 	}
 }
 
 func (wh *WebSocketHub) sendTask() {
 	for task := range wh.Tasks {
+		if wh.tryHandleConversationTask(task) {
+			continue
+		}
 		fsmTask := fsm.TaskData{
-			ID:   task.Id,
-			Type: task.Type,
-			Name: task.Id,
-			// 后续看情况处理任务优先级
-			Priority: 5,
+			ID:   task.ID,
+			Type: int(task.Type),
 			// 需要放入任务的负载数据
 			Payload: task.Payload,
+			From:    task.From,
 		}
 		componet.GetGlobalComponent().AddTask(fsmTask)
 	}
+}
+
+func (wh *WebSocketHub) tryHandleConversationTask(task schema.TaskData) bool {
+
+	question := ""
+	if s, ok := task.Payload.(string); ok {
+		question = s
+	}
+	if question == "" {
+		wh.BroadcastLog(fmt.Sprintf("[Task][%d] payload 缺少 question", task.Type))
+		return true
+	}
+
+	return false
 }
 
 func sendLog(conn *websocket.Conn, content string) {
@@ -289,6 +253,27 @@ func (wh *WebSocketHub) Broadcast(message []byte) {
 	wh.broadcast <- message
 }
 
+func (wh *WebSocketHub) SendToClient(id string, message []byte) {
+	if id == "" {
+		return
+	}
+	wh.clientsMu.RLock()
+	client, ok := wh.clients[id]
+	wh.clientsMu.RUnlock()
+	if !ok || client == nil {
+		return
+	}
+	client.mu.Lock()
+	err := client.conn.WriteMessage(websocket.TextMessage, message)
+	client.mu.Unlock()
+	if err != nil {
+		client.conn.Close()
+		wh.clientsMu.Lock()
+		delete(wh.clients, id)
+		wh.clientsMu.Unlock()
+	}
+}
+
 func (wh *WebSocketHub) BroadcastLog(content string) {
 	logItem := ws.NewLogMessage(content)
 	buf, _ := json.Marshal(logItem)
@@ -296,6 +281,13 @@ func (wh *WebSocketHub) BroadcastLog(content string) {
 }
 
 func (wh *WebSocketHub) Ask(ctx context.Context, question string) []string {
+	wh.clientsMu.RLock()
+	hasClient := len(wh.clients) > 0
+	wh.clientsMu.RUnlock()
+	if !hasClient {
+		return []string{"[AskUser][无客户端] 当前没有连接的 WebSocket 客户端，无法向用户提问。"}
+	}
+
 	answerCh := make(chan string)
 	req := &QuestionRequest{
 		Content:  question,
@@ -308,6 +300,6 @@ func (wh *WebSocketHub) Ask(ctx context.Context, question string) []string {
 	case answer := <-answerCh:
 		return []string{answer}
 	case <-ctx.Done():
-		return []string{}
+		return nil
 	}
 }

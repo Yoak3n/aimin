@@ -270,6 +270,17 @@ func (f *FSM) CurrentStatus() string {
 	return f.currentState.Name()
 }
 
+func (f *FSM) CurrentStateType() StateType {
+	if f.currentState == nil {
+		return -1
+	}
+	return f.currentState.Type()
+}
+
+func (f *FSM) IsInTaskState() bool {
+	return f.CurrentStateType() == TaskStateType
+}
+
 func (f *FSM) SetOnStateChange(cb func(string)) {
 	f.OnStateChange = cb
 	if f.ctx != nil {
@@ -277,11 +288,15 @@ func (f *FSM) SetOnStateChange(cb func(string)) {
 	}
 }
 
-func (f *FSM) UpdateContext(key string, value any) {
+func (f *FSM) UpdateContext(key string, value ...any) {
 	if f.ctx == nil {
 		f.ctx = NewContext()
 	}
-	f.ctx.Data[key] = value
+	if len(value) > 0 {
+		f.ctx.Data[key] = value[0]
+	} else {
+		delete(f.ctx.Data, key)
+	}
 }
 
 func (f *FSM) GetContext(key string) any {

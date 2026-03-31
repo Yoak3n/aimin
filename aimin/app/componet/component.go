@@ -9,8 +9,8 @@ import (
 )
 
 type Component struct {
-	fsm  *fsm.FSM
-	log  chan string
+	fsm *fsm.FSM
+	log chan string
 }
 
 var component *Component
@@ -39,7 +39,18 @@ func (c *Component) FSM() *fsm.FSM {
 }
 
 func (c *Component) AddTask(data fsm.TaskData) {
+	if c.fsm != nil && c.fsm.IsInTaskState() && c.fsm.CurrentStatus() == decision.Task {
+		if v := c.fsm.GetContext(decision.TaskQueueKey); v != nil {
+			if q, ok := v.([]fsm.TaskData); ok {
+				c.fsm.UpdateContext(decision.TaskQueueKey, append(q, data))
+				return
+			}
+		}
+		c.fsm.UpdateContext(decision.TaskQueueKey, []fsm.TaskData{data})
+		return
+	}
+
 	task := decision.NewTaskState()
-	c.fsm.UpdateContext(decision.TaskDataKey, data)
+	c.fsm.UpdateContext(decision.TaskQueueKey, []fsm.TaskData{data})
 	c.fsm.AddTask(task)
 }

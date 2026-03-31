@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"github.com/Yoak3n/aimin/aimin/cmd/app/componet"
+	"github.com/Yoak3n/aimin/aimin/app/componet"
 )
 
 func GetFSMStatus() string {

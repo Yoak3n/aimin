@@ -7,20 +7,6 @@ type WebsocketMessage struct {
 	Data   any        `json:"data"`
 }
 
-type ActionType string
-
-const (
-	ConnectedSuccess ActionType = "Connected"
-	LogMessage       ActionType = "Log"
-	AddTaskMessage   ActionType = "Task"
-	CloseMessage     ActionType = "Close"
-	PingMessage      ActionType = "Ping"
-	PongMessage      ActionType = "Pong"
-	AskMessage       ActionType = "Ask"
-	AnswerMessage    ActionType = "Answer"
-	ReplyMessage     ActionType = "Reply"
-	StateMessage     ActionType = "State"
-)
 
 type LogMessageData struct {
 	Time    string `json:"time"`

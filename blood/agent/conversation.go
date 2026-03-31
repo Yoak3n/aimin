@@ -95,10 +95,11 @@ func (c *ConversationAgent) trimToMaxTurns() {
 	}
 	dropped := append([]schema.OpenAIMessage(nil), c.Messages[:len(c.Messages)-maxMessages]...)
 	c.Messages = append([]schema.OpenAIMessage(nil), c.Messages[len(c.Messages)-maxMessages:]...)
+	
 	c.maybeSilentFlushDailyMemory(dropped, maxMessages)
 }
 
-func formatCompactAssistant(thought string, finalAnswer string) string {
+func formatCompactAssistant(_ string, finalAnswer string) string {
 	finalAnswer = strings.TrimSpace(finalAnswer)
 	if finalAnswer == "" {
 		return ""

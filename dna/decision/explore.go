@@ -7,9 +7,11 @@ import (
 	"math/rand/v2"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
+	"github.com/Yoak3n/aimin/blood/pkg/util"
 	"github.com/Yoak3n/aimin/blood/schema"
 	"github.com/Yoak3n/aimin/blood/service/llm"
 	"github.com/Yoak3n/aimin/dna/action"
@@ -42,9 +44,22 @@ func makeExploreAction() fsm.WorkAction {
 				progress++
 			case 2:
 				answer = askForAnswer(question, chosenStrategy)
+				if chosenStrategy == ExploreStrategyAskUser && isAskUserNoClientAnswer(answer) {
+					chosenStrategy = ExploreStrategyWebSearch
+					noise := ""
+					if ctx != nil && ctx.Persist != nil {
+						noise = exploreNoise(ctx.Persist, 1200, 18)
+					}
+					question = generateExploreQuestionByLLM(chosenType, chosenName, chosenDegree, noise, chosenStrategy)
+					if strings.TrimSpace(question) == "" {
+						question = fmt.Sprintf("%s %s", chosenName, chosenType)
+					}
+					logger.Logger.Infof("[Explore] Strategy=%s Question: %s", chosenStrategy, question)
+					answer = askForAnswer(question, chosenStrategy)
+				}
 				progress++
 			case 3:
-				handleExploreAnswer(answer)
+				handleExploreAnswer(question, answer, chosenType, chosenName)
 				if ctx != nil && ctx.Persist != nil {
 					ctx.Persist.Append("explore", map[string]any{
 						"node_type": chosenType,
@@ -262,11 +277,164 @@ func askForAnswer(question string, strategy ExploreStrategy) []string {
 	}
 
 	if len(out) == 0 {
-		return []string{"[DuckDuckGo] 未返回可用内容"}
+		return nil
 	}
 	return out
 }
 
-func handleExploreAnswer(answer []string) bool {
+func isAskUserNoClientAnswer(answer []string) bool {
+	if len(answer) == 0 {
+		return false
+	}
+	return strings.HasPrefix(strings.TrimSpace(answer[0]), "[AskUser][无客户端]")
+}
+
+type extractedTriple struct {
+	Subject     string `json:"subject"`
+	SubjectType string `json:"subject_type"`
+	Predicate   string `json:"predicate"`
+	Object      string `json:"object"`
+	ObjectType  string `json:"object_type"`
+}
+
+type tripleExtractionResponse struct {
+	Triples []extractedTriple `json:"triples"`
+}
+
+func handleExploreAnswer(question string, answer []string, nodeType string, nodeName string) bool {
+	if answer == nil {
+		return false
+	}
+
+	q := strings.TrimSpace(question)
+	a := strings.TrimSpace(strings.Join(answer, "\n"))
+	logger.Logger.Println("Explore get answer:", a)
+	if q == "" || a == "" {
+		return false
+	}
+
+	n4 := helper.UseDB().GetNeuroDB()
+	if n4 == nil {
+		return false
+	}
+
+	link := util.RandomIdWithPrefix("exp")
+	chains, err := extractTriplesByLLM(q, a, nodeType, nodeName, link)
+	if err != nil {
+		logger.Logger.Errorf("[Explore] extract triples failed: %v", err)
+		return false
+	}
+	if len(chains) == 0 {
+		return false
+	}
+	if err := n4.CreateNode(chains); err != nil {
+		logger.Logger.Errorf("[Explore] write graph failed: %v", err)
+		return false
+	}
 	return true
+}
+
+func extractTriplesByLLM(question string, answer string, nodeType string, nodeName string, link string) ([]schema.EntityTable, error) {
+	systemPrompt := `你是一个“实体关系抽取器”。
+
+你会收到一次探索记录：
+- Node：当前探索的图谱节点（type/name）
+- Question：用于探索/搜索的问题（可能是搜索查询串或自然问题）
+- Answer：通过网络搜索或用户回答得到的内容（多行）
+
+你的任务：仅从 Answer 中抽取可以写入知识图谱的关系，输出三（五）元组列表。
+
+输出要求：
+- 仅输出一段合法 JSON（不要任何解释性文本、不要 Markdown code fence）
+- 必含字段 triples：数组，至少 1 条
+- triples 每条必须包含字段：
+  - subject, subject_type, predicate, object, object_type
+- subject/object：自然语言实体名（中文/英文都可），必须非空
+- subject_type/object_type：实体类型标签（允许中文），要求：只能包含中文/英文/数字/下划线，且以中文/英文/下划线开头；不要包含空格、标点或反引号
+- predicate：关系类型标签（允许中文），要求：只能包含中文/英文/数字/下划线，且以中文/英文/下划线开头；不要包含空格、标点或反引号；尽量语义明确
+- 尽量围绕当前 Node，但不要强行编造；如果 Answer 信息不足，输出 1 条弱三元组（例如 subject=NodeName predicate=RELATED_TO object=Question 或 object=Answer 的主题词）`
+
+	user := fmt.Sprintf("Node: %s:%s\nQuestion: %s\nAnswer:\n%s", strings.TrimSpace(nodeType), strings.TrimSpace(nodeName), question, answer)
+	resp, err := llm.Chat([]schema.OpenAIMessage{{Role: schema.OpenAIMessageRoleUser, Content: user}}, systemPrompt)
+	if err != nil {
+		return nil, err
+	}
+
+	trimmed := strings.TrimSpace(resp)
+	trimmed = strings.TrimPrefix(trimmed, "```json")
+	trimmed = strings.TrimPrefix(trimmed, "```")
+	trimmed = strings.TrimSuffix(trimmed, "```")
+	trimmed = strings.TrimSpace(trimmed)
+
+	out := tripleExtractionResponse{}
+	if err := json.Unmarshal([]byte(trimmed), &out); err != nil {
+		return nil, fmt.Errorf("unmarshal triples json failed: %v", err)
+	}
+	if len(out.Triples) == 0 {
+		return nil, fmt.Errorf("triples is empty")
+	}
+
+	chains := make([]schema.EntityTable, 0, len(out.Triples))
+	for _, t := range out.Triples {
+		sub := normalizeEntityName(t.Subject)
+		obj := normalizeEntityName(t.Object)
+		if sub == "" || obj == "" {
+			continue
+		}
+		st := normalizeGraphIdent(t.SubjectType, "实体")
+		ot := normalizeGraphIdent(t.ObjectType, "实体")
+		pd := normalizeGraphIdent(t.Predicate, "相关")
+		chains = append(chains, schema.EntityTable{
+			Subject:     sub,
+			SubjectType: st,
+			Predicate:   pd,
+			Object:      obj,
+			ObjectType:  ot,
+			Link:        strings.TrimSpace(link),
+		})
+	}
+	if len(chains) == 0 {
+		return nil, fmt.Errorf("triples is empty after sanitize")
+	}
+	return chains, nil
+}
+
+func normalizeEntityName(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	return strings.Join(strings.Fields(s), " ")
+}
+
+func normalizeGraphIdent(s string, fallback string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return fallback
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	lastUnderscore := false
+	for _, r := range s {
+		isLetter := unicode.IsLetter(r)
+		isDigit := unicode.IsDigit(r)
+		if isLetter || isDigit || r == '_' {
+			b.WriteRune(r)
+			lastUnderscore = false
+			continue
+		}
+		if !lastUnderscore {
+			b.WriteByte('_')
+			lastUnderscore = true
+		}
+	}
+	out := strings.Trim(b.String(), "_")
+	if out == "" {
+		return fallback
+	}
+	r0 := []rune(out)[0]
+	if unicode.IsDigit(r0) {
+		out = "_" + out
+	}
+	return out
 }
