@@ -46,8 +46,35 @@ func GrepTool() *Tool {
 
 func ManageMemoryTool() *Tool {
 	return &Tool{
-		Name:   "manage_memory",
-		Desc:   `Manage memory. args: action[,key=value...]. actions: read_long_term, write_long_term, read_daily, write_daily, search, vector_search, get_conversation, recent_conversations, graph_get_node, graph_neighbors, graph_related, graph_search_nodes, graph_relations_by_link. eg: manage_memory(action="vector_search",query="...")`,
+		Name: "manage_memory",
+		Desc: `Memory & graph operations. Use this tool ONLY when you need database-backed memory/graph queries or to write memory files.
+If the info is already injected in <workspace_context> (e.g. MEMORY.md, memory/YYYY-MM-DD.md, memory/GRAPH_SCHEMA.md), read it directly; do NOT call manage_memory.
+
+args: action[,key=value...]
+actions:
+- search(query=...,limit=5) | vector_search(query=...,limit=5) // search past conversations in DB
+- recent_conversations(limit=10) | get_conversation(id=...)     // DB conversation history
+- graph_schema_summary(refresh=1)                               // (re)build cached overview -> memory/GRAPH_SCHEMA.md
+- graph_subgraph(node_type=...,name=...,keyword=...,hops=1|2,limit1=30,limit2=10,max_triples=60,rel_types="A,B")
+- graph_add_triples(triples="Type|Name|REL|Type|Name;...",link="optional")          // add data
+- graph_seed_demo(link="seed_demo")                                                 // demo data
+- graph_get_node(node_type=...,name=...)
+- graph_neighbors(node_type=...,name=...,rel_type=...,limit=20)
+- graph_search_nodes(node_type=...,keyword=...,limit=20)
+- graph_relations_by_link(link=...,limit=50)
+examples:
+- manage_memory(action="vector_search",query="how to run tests",limit=5)
+- manage_memory(action="recent_conversations",limit=10)
+- manage_memory(action="graph_schema_summary",refresh=1)
+- manage_memory(action="graph_subgraph",keyword="Acme",hops=2,max_triples=50)`,
 		Action: tool.ManageMemory,
+	}
+}
+
+func WebTool() *Tool {
+	return &Tool{
+		Name:   "Web",
+		Desc:   `Web search & fetch. args: action=search|fetch. search: Web(search,query="...",limit=5). fetch: Web(fetch,url="...",js=false,timeout_s=20,pdf_max_pages=0). action can be omitted: Web("https://...") or Web("query")`,
+		Action: tool.Web,
 	}
 }

@@ -5,6 +5,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func Run(port string) error {
+	r := InitRouter()
+	err := r.Run(port)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func InitRouter() *gin.Engine {
 	r := gin.Default()
 	r.Use(Cors())

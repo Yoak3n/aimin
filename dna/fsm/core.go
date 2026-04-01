@@ -58,6 +58,9 @@ type FSM struct {
 }
 
 func (f *FSM) broadcastState(name string) {
+	if f.ctx != nil {
+		f.ctx.Current = name
+	}
 	if f.OnStateChange != nil && name != f.lastStateName {
 		f.lastStateName = name
 		f.OnStateChange(name)
@@ -211,7 +214,6 @@ func (f *FSM) handleStateDone() {
 
 // changeState 普通状态切换
 func (f *FSM) changeState(nextStateID string) {
-	f.ctx.Current = nextStateID
 	nextState, ok := f.states[nextStateID]
 	if !ok {
 		fmt.Printf("[FSM] Error: State %s not found\n", nextStateID)

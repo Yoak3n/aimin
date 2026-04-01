@@ -32,7 +32,9 @@ export type WsAnswerMessage = WsMessage<"Answer", string>;
 export type WsTaskType = 0 | 1;
 
 export interface WsTaskData {
-  task_type: WsTaskType;
+  id?: string;
+  from: string;
+  type: WsTaskType;
   payload: string;
 }
 

@@ -6,6 +6,8 @@ test/
 *.log
 .env*
 sp.md
+chat.json
+skills/
 config.json
 *.yaml
 default_workspace/

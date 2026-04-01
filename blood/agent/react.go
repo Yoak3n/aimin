@@ -39,6 +39,7 @@ func NewAgent() *ReActAgent {
 	a.RegisterTool(mcp.GrepTool())
 	a.RegisterTool(mcp.SkillTool())
 	a.RegisterTool(mcp.ManageMemoryTool())
+	a.RegisterTool(mcp.WebTool())
 	if workspace.EnsureWorkspace() {
 		fmt.Println("第一次运行，初始化工作空间")
 

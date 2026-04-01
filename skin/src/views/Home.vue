@@ -1,9 +1,9 @@
 <template>
   <div>
-    <Chat />
+    <ChatHost />
   </div>
 </template>
 
 <script setup lang="ts">
-import Chat from "@/components/Chat/index.vue"
+import ChatHost from "@/components/ChatHost/index.vue"
 </script>

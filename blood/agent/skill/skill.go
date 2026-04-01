@@ -100,6 +100,10 @@ func parseSkillMetadata(content string) *Skill {
 			s.Name = strings.TrimSpace(name)
 		} else if desc, ok := strings.CutPrefix(line, "desc:"); ok {
 			s.Desc = strings.TrimSpace(desc)
+		} else if desc, ok := strings.CutPrefix(line, "description:"); ok {
+			if s.Desc == "" {
+				s.Desc = strings.TrimSpace(desc)
+			}
 		}
 	}
 

@@ -7,7 +7,6 @@ type WebsocketMessage struct {
 	Data   any        `json:"data"`
 }
 
-
 type LogMessageData struct {
 	Time    string `json:"time"`
 	Content string `json:"content"`
@@ -22,7 +21,7 @@ func NewLogMessage(content string) WebsocketMessage {
 
 func NewLogMessageData(content string) LogMessageData {
 	return LogMessageData{
-		Time:    time.Now().Format("2006-01-02 15:04"),
+		Time:    time.Now().Format("2006-01-02 15:04:05"),
 		Content: content,
 	}
 }

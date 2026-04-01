@@ -81,7 +81,7 @@ func (wc *WorkspaceContext) BuildEnvInfo() *WorkspaceContext {
 			cwdFiles += fmt.Sprintf("%s\n", fp.Name())
 		}
 	}
-	cwdFiles = fmt.Sprintf("<cwd_files>%s</cwd_files>", cwdFiles)
+	cwdFiles = fmt.Sprintf("<cwd_files>\n%s</cwd_files>", cwdFiles)
 	out := strings.Replace(wc.prompt, "{local_time}", localTime, 1)
 	out = strings.Replace(out, "{os_info}", osInfo, 1)
 	out = strings.Replace(out, "{cwd}", cwd, 1)
@@ -97,9 +97,9 @@ func (wc *WorkspaceContext) BuildToolInfo() *WorkspaceContext {
 	}
 	var toolsDesc strings.Builder
 	prefix := `## 工具可用性
-你可以使用的工具如下（名称、说明、参数schema）：\n`
+你可以使用的工具如下（名称、说明、参数schema）:`
 	for _, tool := range tools {
-		fmt.Fprintf(&toolsDesc, "%s\n", tool.String())
+		fmt.Fprintf(&toolsDesc, "\n%s", tool.String())
 	}
 	out := strings.Replace(wc.prompt, "{tools_description}", prefix+toolsDesc.String(), 1)
 	wc.prompt = out
@@ -116,11 +116,11 @@ func (wc *WorkspaceContext) BuildSkillInfo() *WorkspaceContext {
 你可以使用的技能如下（名称、说明）：`
 	var sb strings.Builder
 	for _, s := range skills {
-		fmt.Fprintf(&sb, "<skill><name>%s</name>\n<desc>%s</desc>\n<location>%s</location></skill>\n", s.Name, s.Desc, s.Location)
+		fmt.Fprintf(&sb, "<skill><name>%s</name><desc>%s</desc><location>%s</location></skill>\n", s.Name, s.Desc, s.Location)
 	}
-	availableSkillStr := "<available_skills>" + sb.String() + "</available_skills>"
+	availableSkillStr := "<available_skills>\n" + sb.String() + "</available_skills>"
 	activedSkillStr := ""
-	replaceStr := prefix + "\n"
+	replaceStr := prefix
 	if skill.GlobalSkillHUB().Active != "" {
 		activedSkillStr = skill.GlobalSkillHUB().LoadSkill(skill.GlobalSkillHUB().Active)
 		replaceStr += "\n" + activedSkillStr + "\n" + availableSkillStr

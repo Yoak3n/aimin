@@ -1,4 +1,5 @@
 import { defineStore } from "pinia";
+import type { WsIncomingMessage, WsOutgoingMessage, WsTaskType } from "@/types/ws";
 
 export const useAppStore = defineStore("app", {
   state: () => ({
@@ -6,6 +7,8 @@ export const useAppStore = defineStore("app", {
     socket: null as WebSocket | null,
     isConnected: false,
     clientId: "",
+    lastIncomingMessage: null as WsIncomingMessage | null,
+    lastIncomingRaw: "",
   }),
   actions: {
     initWebSocket(id?: string) {
@@ -21,17 +24,25 @@ export const useAppStore = defineStore("app", {
       this.socket = new WebSocket(wsUrl);
 
       this.socket.onopen = () => {
-        console.log("WebSocket connected");
         this.isConnected = true;
       };
 
       this.socket.onmessage = (event) => {
-        console.log("WebSocket message received:", event.data);
-        // 处理接收到的消息
+        const raw = typeof event.data === "string" ? event.data : String(event.data ?? "");
+        const message = parseIncomingMessage(raw);
+        if (!message) return;
+
+        this.lastIncomingMessage = message;
+        this.lastIncomingRaw = raw;
+
+        if (message.action === "Ping") {
+          this.sendMessage({ action: "Pong", data: "Pong" });
+        }
+
+        notifyIncoming(message, raw);
       };
 
       this.socket.onclose = () => {
-        console.log("WebSocket disconnected");
         this.isConnected = false;
         this.socket = null;
       };
@@ -41,12 +52,47 @@ export const useAppStore = defineStore("app", {
         this.isConnected = false;
       };
     },
-    sendMessage(message: any) {
+    onIncomingMessage(listener: (message: WsIncomingMessage, raw: string) => void) {
+      incomingListeners.add(listener);
+      return () => {
+        incomingListeners.delete(listener);
+      };
+    },
+    sendMessage(message: WsOutgoingMessage) {
       if (this.socket && this.isConnected) {
         this.socket.send(JSON.stringify(message));
       } else {
         console.error("WebSocket is not connected");
       }
     },
+    sendPing(payload: string = "Ping") {
+      this.sendMessage({ action: "Ping", data: payload });
+    },
+    sendAnswer(answer: string) {
+      this.sendMessage({ action: "Answer", data: answer });
+    },
+    sendTask(payload: string, taskType: WsTaskType = 0) {
+      this.sendMessage({ action: "Task", data: { type: taskType, payload, from: this.clientId } });
+    },
   },
 });
+
+const incomingListeners = new Set<(message: WsIncomingMessage, raw: string) => void>();
+
+function notifyIncoming(message: WsIncomingMessage, raw: string) {
+  incomingListeners.forEach((listener) => {
+    listener(message, raw);
+  });
+}
+
+function parseIncomingMessage(raw: string): WsIncomingMessage | null {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return null;
+    const maybeMessage = parsed as { action?: unknown; data?: unknown };
+    if (typeof maybeMessage.action !== "string") return null;
+    return maybeMessage as WsIncomingMessage;
+  } catch {
+    return null;
+  }
+}

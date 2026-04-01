@@ -95,7 +95,34 @@ func Search(ctx context.Context, query string, opt *Options) (*SearchResult, err
 		RelatedTopics: parseRelatedTopics(raw.Get("RelatedTopics")),
 		Raw:           raw,
 	}
+	if isEmptyResult(out) {
+		prodState := strings.TrimSpace(out.Raw.Get("meta.production_state").String())
+		t := strings.TrimSpace(out.Raw.Get("Type").String())
+		return nil, fmt.Errorf("empty search result (type=%s production_state=%s)", t, prodState)
+	}
 	return out, nil
+}
+
+func isEmptyResult(res *SearchResult) bool {
+	if res == nil {
+		return true
+	}
+	if strings.TrimSpace(res.Heading) != "" {
+		return false
+	}
+	if strings.TrimSpace(res.AbstractText) != "" {
+		return false
+	}
+	if strings.TrimSpace(res.Answer) != "" {
+		return false
+	}
+	if strings.TrimSpace(res.Definition) != "" {
+		return false
+	}
+	if len(res.Results) > 0 || len(res.RelatedTopics) > 0 {
+		return false
+	}
+	return true
 }
 
 func parseItems(arr gjson.Result) []ResultItem {

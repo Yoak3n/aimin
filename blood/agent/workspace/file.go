@@ -75,6 +75,11 @@ func makeFileSpecMap(choose ContextChoice) map[string]FileSpec {
 		RelPath:  "/MEMORY.md",
 		Required: false,
 	}
+	ret["GRAPH_SCHEMA.md"] = FileSpec{
+		Name:     "GRAPH_SCHEMA.md",
+		RelPath:  "/memory/GRAPH_SCHEMA.md",
+		Required: false,
+	}
 
 	switch choose {
 	case Normal:
@@ -86,6 +91,7 @@ func makeFileSpecMap(choose ContextChoice) map[string]FileSpec {
 		setRequired(ret, "BOOT.md")
 		setRequired(ret, "TOOLS.md")
 		setRequired(ret, "MEMORY.md")
+		setRequired(ret, "GRAPH_SCHEMA.md")
 		// 从今天开始往前算的天数
 		for _, spec := range diaryFiles() {
 			ret[spec.Name] = spec

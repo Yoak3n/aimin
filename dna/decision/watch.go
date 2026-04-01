@@ -1,6 +1,8 @@
 package decision
 
 import (
+	"time"
+
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/dna/fsm"
 )
@@ -13,9 +15,15 @@ func NewWatchNode(check func(ctx *fsm.Context) bool) *fsm.WorkState {
 
 func makeWatchAction() fsm.WorkAction {
 	return func(ctx *fsm.Context) string {
-		logger.Logger.Println("I‘m watching:", ctx.Current)
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for range 1 {
+			logger.Logger.Println("I'm watching:", ctx.Current)
+			<-ticker.C
+		}
 		ctx.Attr.AddEnergy(-1)
-		ctx.Attr.AddOpenness(3)
+		ctx.Attr.AddCuriosity(-2)
+		ctx.Attr.AddOpenness(-3)
 		return fsm.Done
 	}
 }

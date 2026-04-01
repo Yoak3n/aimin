@@ -14,6 +14,121 @@ type NodeDegree struct {
 	Degree int64  `json:"degree"`
 }
 
+type LabelCount struct {
+	Label string `json:"label"`
+	Count int64  `json:"count"`
+}
+
+type RelTypeCount struct {
+	Type  string `json:"type"`
+	Count int64  `json:"count"`
+}
+
+type PatternCount struct {
+	From  string `json:"from"`
+	Rel   string `json:"rel"`
+	To    string `json:"to"`
+	Count int64  `json:"count"`
+}
+
+type PropCount struct {
+	Key   string `json:"key"`
+	Count int64  `json:"count"`
+}
+
+type LabelProps struct {
+	Label string      `json:"label"`
+	Props []PropCount `json:"props"`
+}
+
+func (n *Neo4jDB) SampleNodeNamesByLabel(label string, limit int) ([]string, error) {
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return nil, fmt.Errorf("label is required")
+	}
+	if limit <= 0 {
+		limit = 5
+	}
+	if limit > 20 {
+		limit = 20
+	}
+	query := "MATCH (n) WHERE $label IN labels(n) AND n.name IS NOT NULL " +
+		"RETURN n.name AS name ORDER BY id(n) ASC LIMIT $limit"
+	res, err := n.eagerQuery(query, map[string]any{"label": label, "limit": limit})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(res.Records))
+	for _, r := range res.Records {
+		v, _ := r.Get("name")
+		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
+func (n *Neo4jDB) SampleTriples(limit int) ([]schema.Edge, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	query := "MATCH (a)-[r]->(b) RETURN a AS a, r AS r, b AS b ORDER BY id(r) ASC LIMIT $limit"
+	res, err := n.eagerQuery(query, map[string]any{"limit": limit})
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]schema.Edge, 0, len(res.Records))
+	for _, rec := range res.Records {
+		av, okA := rec.Get("a")
+		rv, okR := rec.Get("r")
+		bv, okB := rec.Get("b")
+		if !okA || !okR || !okB {
+			continue
+		}
+		an, okA := av.(neo4j.Node)
+		rr, okR := rv.(neo4j.Relationship)
+		bn, okB := bv.(neo4j.Node)
+		if !okA || !okR || !okB {
+			continue
+		}
+
+		aName, _ := an.Props["name"].(string)
+		bName, _ := bn.Props["name"].(string)
+		aType := ""
+		bType := ""
+		if len(an.Labels) > 0 {
+			aType = an.Labels[0]
+		}
+		if len(bn.Labels) > 0 {
+			bType = bn.Labels[0]
+		}
+
+		edge := schema.Edge{
+			Type: rr.Type,
+			Attr: map[string]any{},
+			Subject: &schema.Node{
+				Label: aName,
+				Type:  aType,
+				Attr:  an.Props,
+			},
+			Object: &schema.Node{
+				Label: bName,
+				Type:  bType,
+				Attr:  bn.Props,
+			},
+		}
+		for k, v := range rr.Props {
+			edge.Attr[k] = v
+		}
+		out = append(out, edge)
+	}
+	return out, nil
+}
+
 func (n *Neo4jDB) eagerQuery(query string, params map[string]any) (*neo4j.EagerResult, error) {
 	if n.conn == nil {
 		n.reconnectNeuroDatabase()
@@ -307,6 +422,257 @@ func (n *Neo4jDB) FindLeastConnectedNodes(nodeType string, limit int) ([]NodeDeg
 			item.Degree = int64(v)
 		}
 		out = append(out, item)
+	}
+	return out, nil
+}
+
+func (n *Neo4jDB) GetTopLabels(limit int) ([]LabelCount, error) {
+	if limit <= 0 {
+		limit = 30
+	}
+	query := "CALL db.labels() YIELD label " +
+		"CALL { WITH label MATCH (n) WHERE label IN labels(n) RETURN count(n) AS c } " +
+		"RETURN label AS label, c AS c ORDER BY c DESC LIMIT $limit"
+	res, err := n.eagerQuery(query, map[string]any{"limit": limit})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]LabelCount, 0, len(res.Records))
+	for _, r := range res.Records {
+		lv, _ := r.Get("label")
+		cv, _ := r.Get("c")
+		item := LabelCount{}
+		if s, ok := lv.(string); ok {
+			item.Label = s
+		}
+		switch v := cv.(type) {
+		case int64:
+			item.Count = v
+		case int:
+			item.Count = int64(v)
+		}
+		if item.Label != "" {
+			out = append(out, item)
+		}
+	}
+	return out, nil
+}
+
+func (n *Neo4jDB) GetTopRelationshipTypes(limit int) ([]RelTypeCount, error) {
+	if limit <= 0 {
+		limit = 30
+	}
+	query := "CALL db.relationshipTypes() YIELD relationshipType " +
+		"CALL { WITH relationshipType MATCH ()-[r]->() WHERE type(r)=relationshipType RETURN count(r) AS c } " +
+		"RETURN relationshipType AS t, c AS c ORDER BY c DESC LIMIT $limit"
+	res, err := n.eagerQuery(query, map[string]any{"limit": limit})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RelTypeCount, 0, len(res.Records))
+	for _, r := range res.Records {
+		tv, _ := r.Get("t")
+		cv, _ := r.Get("c")
+		item := RelTypeCount{}
+		if s, ok := tv.(string); ok {
+			item.Type = s
+		}
+		switch v := cv.(type) {
+		case int64:
+			item.Count = v
+		case int:
+			item.Count = int64(v)
+		}
+		if item.Type != "" {
+			out = append(out, item)
+		}
+	}
+	return out, nil
+}
+
+func (n *Neo4jDB) GetTopPatterns(limit int) ([]PatternCount, error) {
+	if limit <= 0 {
+		limit = 30
+	}
+	query := "MATCH (a)-[r]->(b) " +
+		"RETURN head(labels(a)) AS from, type(r) AS rel, head(labels(b)) AS to, count(*) AS c " +
+		"ORDER BY c DESC LIMIT $limit"
+	res, err := n.eagerQuery(query, map[string]any{"limit": limit})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PatternCount, 0, len(res.Records))
+	for _, r := range res.Records {
+		fv, _ := r.Get("from")
+		rv, _ := r.Get("rel")
+		tv, _ := r.Get("to")
+		cv, _ := r.Get("c")
+		item := PatternCount{}
+		if s, ok := fv.(string); ok {
+			item.From = s
+		}
+		if s, ok := rv.(string); ok {
+			item.Rel = s
+		}
+		if s, ok := tv.(string); ok {
+			item.To = s
+		}
+		switch v := cv.(type) {
+		case int64:
+			item.Count = v
+		case int:
+			item.Count = int64(v)
+		}
+		if item.From != "" && item.Rel != "" && item.To != "" {
+			out = append(out, item)
+		}
+	}
+	return out, nil
+}
+
+func (n *Neo4jDB) SampleTopPropsByLabel(label string, sample int, propLimit int) ([]PropCount, error) {
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return nil, fmt.Errorf("label is required")
+	}
+	if sample <= 0 {
+		sample = 200
+	}
+	if propLimit <= 0 {
+		propLimit = 5
+	}
+	if sample > 2000 {
+		sample = 2000
+	}
+	if propLimit > 20 {
+		propLimit = 20
+	}
+	query := "MATCH (n) WHERE $label IN labels(n) " +
+		"WITH n LIMIT $sample " +
+		"UNWIND keys(n) AS k " +
+		"RETURN k AS k, count(*) AS c ORDER BY c DESC LIMIT $limit"
+	res, err := n.eagerQuery(query, map[string]any{
+		"label":  label,
+		"sample": sample,
+		"limit":  propLimit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PropCount, 0, len(res.Records))
+	for _, r := range res.Records {
+		kv, _ := r.Get("k")
+		cv, _ := r.Get("c")
+		item := PropCount{}
+		if s, ok := kv.(string); ok {
+			item.Key = s
+		}
+		switch v := cv.(type) {
+		case int64:
+			item.Count = v
+		case int:
+			item.Count = int64(v)
+		}
+		if item.Key != "" {
+			out = append(out, item)
+		}
+	}
+	return out, nil
+}
+
+func (n *Neo4jDB) FindNeighborEdges(nodeType string, name string, relTypes []string, limit int) ([]schema.Edge, error) {
+	nodeType = strings.TrimSpace(nodeType)
+	name = normalizeNodeName(name)
+	if !validIdent(nodeType) {
+		return nil, fmt.Errorf("invalid nodeType=%q", nodeType)
+	}
+	if name == "" {
+		return nil, fmt.Errorf("invalid name")
+	}
+	if limit <= 0 {
+		limit = 30
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	filter := ""
+	if len(relTypes) > 0 {
+		clean := make([]string, 0, len(relTypes))
+		for _, rt := range relTypes {
+			rt = strings.TrimSpace(rt)
+			if rt == "" {
+				continue
+			}
+			if !validIdent(rt) {
+				return nil, fmt.Errorf("invalid relType=%q", rt)
+			}
+			clean = append(clean, rt)
+		}
+		relTypes = clean
+		if len(relTypes) > 0 {
+			filter = " AND type(r) IN $relTypes "
+		}
+	}
+
+	query := fmt.Sprintf(
+		"MATCH (seed:`%s` {name:$name})-[r]-(n) "+
+			"WHERE 1=1 %s "+
+			"RETURN seed AS seed, r AS r, n AS n, (id(startNode(r))=id(seed)) AS out "+
+			"ORDER BY coalesce(r.weight,0) DESC, id(r) ASC LIMIT $limit",
+		nodeType, filter,
+	)
+
+	params := map[string]any{"name": name, "limit": limit}
+	if len(relTypes) > 0 {
+		params["relTypes"] = relTypes
+	}
+	res, err := n.eagerQuery(query, params)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]schema.Edge, 0, len(res.Records))
+	for _, rec := range res.Records {
+		sv, okS := rec.Get("seed")
+		rv, okR := rec.Get("r")
+		nv, okN := rec.Get("n")
+		ov, okO := rec.Get("out")
+		if !okS || !okR || !okN || !okO {
+			continue
+		}
+		sn, okS := sv.(neo4j.Node)
+		rr, okR := rv.(neo4j.Relationship)
+		on, okN := nv.(neo4j.Node)
+		if !okS || !okR || !okN {
+			continue
+		}
+		outDir, _ := ov.(bool)
+
+		sName, _ := sn.Props["name"].(string)
+		oName, _ := on.Props["name"].(string)
+		sType := nodeType
+		oType := ""
+		if len(on.Labels) > 0 {
+			oType = on.Labels[0]
+		}
+
+		sub := &schema.Node{Label: sName, Type: sType, Attr: sn.Props}
+		obj := &schema.Node{Label: oName, Type: oType, Attr: on.Props}
+		if !outDir {
+			sub, obj = obj, sub
+		}
+
+		edge := schema.Edge{
+			Type:    rr.Type,
+			Attr:    map[string]any{},
+			Subject: sub,
+			Object:  obj,
+		}
+		for k, v := range rr.Props {
+			edge.Attr[k] = v
+		}
+		out = append(out, edge)
 	}
 	return out, nil
 }

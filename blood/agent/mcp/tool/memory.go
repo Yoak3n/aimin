@@ -121,9 +121,432 @@ func ManageMemory(ctx *Context) string {
 		}
 		limit := parseLimit(args["limit"], 50)
 		return manageMemoryGraphRelationsByLink(link, limit)
+	case "graph_schema_summary":
+		refresh := strings.TrimSpace(firstNonEmpty(args["refresh"], args["force"])) != ""
+		return manageMemoryGraphSchemaSummary(refresh)
+	case "graph_subgraph":
+		nodeType := strings.TrimSpace(firstNonEmpty(args["node_type"], args["type"], args["_1"]))
+		name := strings.TrimSpace(firstNonEmpty(args["name"], args["_2"]))
+		keyword := strings.TrimSpace(firstNonEmpty(args["keyword"], args["query"]))
+		if nodeType == "" && name == "" && keyword == "" {
+			return "ERROR: missing node_type/name or keyword"
+		}
+		hops := parseLimit(args["hops"], 2)
+		if hops < 1 {
+			hops = 1
+		}
+		if hops > 2 {
+			hops = 2
+		}
+		limit1 := parseLimit(args["limit1"], 30)
+		limit2 := parseLimit(args["limit2"], 10)
+		maxTriples := parseLimit(args["max_triples"], 60)
+		relTypes := strings.TrimSpace(firstNonEmpty(args["rel_types"], args["rels"]))
+		return manageMemoryGraphSubgraph(nodeType, name, keyword, hops, limit1, limit2, maxTriples, relTypes)
+	case "graph_add_triples":
+		content := strings.TrimSpace(firstNonEmpty(args["triples"], args["content"], args["_1"]))
+		if content == "" {
+			return "ERROR: missing triples/content"
+		}
+		link := strings.TrimSpace(firstNonEmpty(args["link"], args["source"]))
+		return manageMemoryGraphAddTriples(content, link)
+	case "graph_seed_demo":
+		link := strings.TrimSpace(firstNonEmpty(args["link"], args["source"]))
+		if link == "" {
+			link = "seed_demo"
+		}
+		return manageMemoryGraphSeedDemo(link)
 	default:
 		return fmt.Sprintf("ERROR: unsupported action: %s", action)
 	}
+}
+
+func manageMemoryGraphSchemaSummary(refresh bool) string {
+	path, err := resolveWorkspaceFile(filepath.ToSlash(filepath.Join("memory", "GRAPH_SCHEMA.md")))
+	if err != nil {
+		return "ERROR: " + err.Error()
+	}
+
+	if !refresh {
+		if b, err := os.ReadFile(path); err == nil && len(b) > 0 {
+			return string(b)
+		}
+	}
+
+	n4 := helper.UseDB().GetNeuroDB()
+	if n4 == nil {
+		return "ERROR: neuro db is nil"
+	}
+
+	labels, err := n4.GetTopLabels(30)
+	if err != nil {
+		return "ERROR: " + err.Error()
+	}
+	rels, err := n4.GetTopRelationshipTypes(30)
+	if err != nil {
+		return "ERROR: " + err.Error()
+	}
+	patterns, err := n4.GetTopPatterns(30)
+	if err != nil {
+		return "ERROR: " + err.Error()
+	}
+	labelProps := make([]string, 0, 10)
+	for i, lc := range labels {
+		if i >= 10 {
+			break
+		}
+		props, err := n4.SampleTopPropsByLabel(lc.Label, 200, 5)
+		if err != nil {
+			continue
+		}
+		keys := make([]string, 0, len(props))
+		for _, p := range props {
+			if p.Key == "" {
+				continue
+			}
+			keys = append(keys, p.Key)
+		}
+		if len(keys) == 0 {
+			continue
+		}
+		labelProps = append(labelProps, fmt.Sprintf("%s{%s}", lc.Label, strings.Join(keys, ",")))
+	}
+
+	sb := strings.Builder{}
+	sb.WriteString("# GRAPH_SCHEMA (cached)\n\n")
+	sb.WriteString("HowToUse:\n")
+	sb.WriteString("- Read this once as a global overview (types/relations/patterns).\n")
+	sb.WriteString("- Then query a small local subgraph per question: manage_memory(action=\"graph_subgraph\",keyword=\"...\",hops=1|2,max_triples=40).\n")
+	sb.WriteString("- Prefer triples + small props; avoid dumping full nodes.\n\n")
+
+	var totalNodes int64
+	for _, lc := range labels {
+		totalNodes += lc.Count
+	}
+	var totalRels int64
+	for _, rc := range rels {
+		totalRels += rc.Count
+	}
+	fmt.Fprintf(&sb, "Stats:\n- nodes=%d\n- rels=%d\n\n", totalNodes, totalRels)
+
+	sb.WriteString("NodeTypes:\n")
+	for _, lc := range labels {
+		fmt.Fprintf(&sb, "- %s(%d)\n", lc.Label, lc.Count)
+	}
+	sb.WriteString("\nRelTypes:\n")
+	for _, rc := range rels {
+		fmt.Fprintf(&sb, "- %s(%d)\n", rc.Type, rc.Count)
+	}
+	sb.WriteString("\nTopPatterns:\n")
+	for _, pc := range patterns {
+		fmt.Fprintf(&sb, "- (%s)-%s->(%s) (%d)\n", pc.From, pc.Rel, pc.To, pc.Count)
+	}
+	if len(labelProps) > 0 {
+		sb.WriteString("\nKeyProps:\n")
+		for _, lp := range labelProps {
+			fmt.Fprintf(&sb, "- %s\n", lp)
+		}
+	}
+	if totalNodes < 10 {
+		sb.WriteString("\nNextStep:\n")
+		sb.WriteString("- Graph is sparse. Add more entities/relations, then refresh this file.\n")
+		sb.WriteString("- Options:\n")
+		sb.WriteString("  - manage_memory(action=\"graph_add_triples\",triples=\"人物|张三|工作于|地点|上海;人物|张三|具有|特性|擅长Go\",link=\"...optional...\")\n")
+		sb.WriteString("  - manage_memory(action=\"graph_seed_demo\")  (demo data)\n")
+		sb.WriteString("  - manage_memory(action=\"graph_schema_summary\",refresh=1)\n")
+	}
+	sb.WriteString("\n")
+
+	_ = os.MkdirAll(filepath.Dir(path), 0755)
+	_ = os.WriteFile(path, []byte(sb.String()), 0644)
+	return sb.String()
+}
+
+func manageMemoryGraphAddTriples(content string, link string) string {
+	n4 := helper.UseDB().GetNeuroDB()
+	if n4 == nil {
+		return "ERROR: neuro db is nil"
+	}
+
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return "ERROR: empty triples"
+	}
+
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	content = strings.ReplaceAll(content, "\r", "\n")
+	content = strings.ReplaceAll(content, ";", "\n")
+
+	lines := strings.Split(content, "\n")
+	chains := make([]schema.EntityTable, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, "|")
+		if len(parts) < 5 {
+			return "ERROR: invalid triple line: " + line
+		}
+		subType := strings.TrimSpace(parts[0])
+		sub := strings.TrimSpace(parts[1])
+		pred := strings.TrimSpace(parts[2])
+		objType := strings.TrimSpace(parts[3])
+		obj := strings.TrimSpace(parts[4])
+		lk := link
+		if len(parts) >= 6 && strings.TrimSpace(parts[5]) != "" {
+			lk = strings.TrimSpace(parts[5])
+		}
+		chains = append(chains, schema.EntityTable{
+			Subject:     sub,
+			SubjectType: subType,
+			Predicate:   pred,
+			Object:      obj,
+			ObjectType:  objType,
+			Link:        lk,
+		})
+	}
+
+	if len(chains) == 0 {
+		return "ERROR: no triples"
+	}
+	if err := n4.CreateNode(chains); err != nil {
+		return "ERROR: " + err.Error()
+	}
+	return fmt.Sprintf("OK: inserted %d triples", len(chains))
+}
+
+func manageMemoryGraphSeedDemo(link string) string {
+	n4 := helper.UseDB().GetNeuroDB()
+	if n4 == nil {
+		return "ERROR: neuro db is nil"
+	}
+
+	chains := []schema.EntityTable{
+		{Subject: "张三", SubjectType: "人物", Predicate: "是", Object: "工程师", ObjectType: "概念", Link: link},
+		{Subject: "张三", SubjectType: "人物", Predicate: "具有", Object: "擅长Go", ObjectType: "特性", Link: link},
+		{Subject: "张三", SubjectType: "人物", Predicate: "工作于", Object: "上海", ObjectType: "地点", Link: link},
+		{Subject: "李雷", SubjectType: "人物", Predicate: "是", Object: "产品经理", ObjectType: "概念", Link: link},
+		{Subject: "李雷", SubjectType: "人物", Predicate: "具有", Object: "重视用户体验", ObjectType: "特性", Link: link},
+		{Subject: "李雷", SubjectType: "人物", Predicate: "工作于", Object: "北京", ObjectType: "地点", Link: link},
+		{Subject: "韩梅梅", SubjectType: "人物", Predicate: "是", Object: "研究员", ObjectType: "概念", Link: link},
+		{Subject: "韩梅梅", SubjectType: "人物", Predicate: "具有", Object: "喜欢阅读", ObjectType: "特性", Link: link},
+		{Subject: "韩梅梅", SubjectType: "人物", Predicate: "工作于", Object: "深圳", ObjectType: "地点", Link: link},
+	}
+
+	if err := n4.CreateNode(chains); err != nil {
+		return "ERROR: " + err.Error()
+	}
+	return fmt.Sprintf("OK: seeded %d triples (link=%s)", len(chains), link)
+}
+
+func manageMemoryGraphSubgraph(nodeType string, name string, keyword string, hops int, limit1 int, limit2 int, maxTriples int, relTypes string) string {
+	n4 := helper.UseDB().GetNeuroDB()
+	if n4 == nil {
+		return "ERROR: neuro db is nil"
+	}
+
+	if strings.TrimSpace(name) == "" {
+		k := strings.TrimSpace(keyword)
+		if k == "" {
+			k = strings.TrimSpace(name)
+		}
+		if k == "" {
+			return "ERROR: missing seed name/keyword"
+		}
+		cands, err := n4.FindNodesByNameContains(nodeType, k, 5)
+		if err != nil {
+			return "ERROR: " + err.Error()
+		}
+		if len(cands) == 0 {
+			return "no matches"
+		}
+		nodeType = cands[0].Type
+		name = cands[0].Label
+	}
+
+	rt := splitRelTypes(relTypes)
+
+	edges1, err := n4.FindNeighborEdges(nodeType, name, rt, limit1)
+	if err != nil {
+		return "ERROR: " + err.Error()
+	}
+	edges := make([]schema.Edge, 0, len(edges1)+(len(edges1)*limit2))
+	edges = append(edges, edges1...)
+
+	if hops >= 2 && limit2 > 0 {
+		seen := map[string]bool{}
+		neighbors := make([]schema.Node, 0, len(edges1))
+		for _, e := range edges1 {
+			if e.Subject != nil && e.Subject.Type == nodeType && e.Subject.Label == name {
+				if e.Object != nil {
+					key := e.Object.Type + "|" + e.Object.Label
+					if !seen[key] {
+						seen[key] = true
+						neighbors = append(neighbors, *e.Object)
+					}
+				}
+			} else if e.Object != nil && e.Object.Type == nodeType && e.Object.Label == name {
+				if e.Subject != nil {
+					key := e.Subject.Type + "|" + e.Subject.Label
+					if !seen[key] {
+						seen[key] = true
+						neighbors = append(neighbors, *e.Subject)
+					}
+				}
+			} else {
+				if e.Subject != nil {
+					key := e.Subject.Type + "|" + e.Subject.Label
+					if !seen[key] {
+						seen[key] = true
+						neighbors = append(neighbors, *e.Subject)
+					}
+				}
+				if e.Object != nil {
+					key := e.Object.Type + "|" + e.Object.Label
+					if !seen[key] {
+						seen[key] = true
+						neighbors = append(neighbors, *e.Object)
+					}
+				}
+			}
+		}
+
+		for i := range neighbors {
+			if len(edges) >= maxTriples {
+				break
+			}
+			nn := neighbors[i]
+			if nn.Type == "" || nn.Label == "" {
+				continue
+			}
+			e2, err := n4.FindNeighborEdges(nn.Type, nn.Label, rt, limit2)
+			if err != nil {
+				continue
+			}
+			for _, e := range e2 {
+				edges = append(edges, e)
+				if len(edges) >= maxTriples {
+					break
+				}
+			}
+		}
+	}
+
+	if maxTriples > 0 && len(edges) > maxTriples {
+		edges = edges[:maxTriples]
+	}
+
+	seedNode, _ := n4.GetNode(nodeType, name)
+	sb := strings.Builder{}
+	sb.WriteString("<graph_subgraph>\n")
+	sb.WriteString("<seed>\n")
+	fmt.Fprintf(&sb, "<type>%s</type>\n", compactOneLine(nodeType, 80))
+	fmt.Fprintf(&sb, "<name>%s</name>\n", compactOneLine(name, 240))
+	sb.WriteString("</seed>\n")
+	if seedNode != nil {
+		sb.WriteString(formatProps(limitProps(seedNode.Attr, 3), 10))
+	}
+	sb.WriteString(formatTriples(edges, maxTriples))
+	sb.WriteString(formatNodeNotes(edges, 10, 3))
+	sb.WriteString("</graph_subgraph>")
+	return sb.String()
+}
+
+func splitRelTypes(s string) []string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func limitProps(props map[string]any, max int) map[string]any {
+	if len(props) == 0 || max <= 0 {
+		return map[string]any{}
+	}
+	out := map[string]any{}
+	keys := make([]string, 0, len(props))
+	for k := range props {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if len(out) >= max {
+			break
+		}
+		out[k] = props[k]
+	}
+	return out
+}
+
+func formatTriples(edges []schema.Edge, max int) string {
+	sb := strings.Builder{}
+	sb.WriteString("<triples>\n")
+	n := len(edges)
+	if max > 0 && n > max {
+		n = max
+	}
+	for i := 0; i < n; i++ {
+		e := edges[i]
+		s := nodeRef(e.Subject)
+		o := nodeRef(e.Object)
+		rel := compactOneLine(e.Type, 80)
+		fmt.Fprintf(&sb, "<t>(%s)-[%s]->(%s)</t>\n", s, rel, o)
+	}
+	sb.WriteString("</triples>\n")
+	return sb.String()
+}
+
+func nodeRef(n *schema.Node) string {
+	if n == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s|%s", compactOneLine(n.Type, 60), compactOneLine(n.Label, 180))
+}
+
+func formatNodeNotes(edges []schema.Edge, maxNodes int, maxProps int) string {
+	nodes := map[string]*schema.Node{}
+	for _, e := range edges {
+		if e.Subject != nil {
+			key := e.Subject.Type + "|" + e.Subject.Label
+			nodes[key] = e.Subject
+		}
+		if e.Object != nil {
+			key := e.Object.Type + "|" + e.Object.Label
+			nodes[key] = e.Object
+		}
+	}
+	if len(nodes) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(nodes))
+	for k := range nodes {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	if maxNodes > 0 && len(keys) > maxNodes {
+		keys = keys[:maxNodes]
+	}
+	sb := strings.Builder{}
+	sb.WriteString("<node_notes>\n")
+	for _, k := range keys {
+		n := nodes[k]
+		sb.WriteString("<node>\n")
+		fmt.Fprintf(&sb, "<id>%s</id>\n", compactOneLine(k, 260))
+		sb.WriteString(formatProps(limitProps(n.Attr, maxProps), maxProps))
+		sb.WriteString("</node>\n")
+	}
+	sb.WriteString("</node_notes>\n")
+	return sb.String()
 }
 
 func manageMemoryGraphGetNode(nodeType string, name string) string {

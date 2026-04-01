@@ -2,10 +2,13 @@ package interactive
 
 import (
 	"encoding/json"
+	"log"
+	"os"
 
 	"github.com/Yoak3n/aimin/blood/agent"
 	"github.com/Yoak3n/aimin/blood/schema"
 	schemaws "github.com/Yoak3n/aimin/blood/schema/ws"
+	"github.com/Yoak3n/aimin/nerve"
 )
 
 var WSReplyBroadcast func(clientID string, message []byte)
@@ -13,7 +16,7 @@ var WSReplyBroadcast func(clientID string, message []byte)
 func NewConversationTask(id, from string) *agent.ConversationAgent {
 	base := agent.NewAgent()
 	conv := agent.NewConversationAgent(base)
-	conv.SetMaxTurns(10)
+	conv.SetMaxTurns(8)
 	chunkIdx := 1
 
 	base.RegisterAssistantDeltaHandler(func(delta string) error {
@@ -37,7 +40,7 @@ func NewConversationTask(id, from string) *agent.ConversationAgent {
 		return nil
 	})
 
-	base.RegisterFinalAnswerHandler(func(_ string, _ []schema.OpenAIMessage, finalAnswer string) {
+	base.RegisterFinalAnswerHandler(func(system string, msgs []schema.OpenAIMessage, finalAnswer string) {
 		msg := schemaws.WebsocketMessage{
 			Action: schemaws.ReplyMessage,
 			Data: &schemaws.ReplyMessageData{
@@ -54,6 +57,13 @@ func NewConversationTask(id, from string) *agent.ConversationAgent {
 		if WSReplyBroadcast != nil {
 			WSReplyBroadcast(from, buf)
 		}
+		data, err := json.Marshal(msgs)
+		if err != nil {
+			log.Println("marshal msg err:", err)
+			return
+		}
+		os.WriteFile("chat.json", data, 0644)
+		nerve.ResponseHook(system, finalAnswer, msgs)
 	})
 
 	return conv

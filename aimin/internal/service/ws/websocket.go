@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/Yoak3n/aimin/aimin/app/componet"
+	"github.com/Yoak3n/aimin/blood/pkg/logger"
+	"github.com/Yoak3n/aimin/blood/pkg/util"
 	"github.com/Yoak3n/aimin/blood/schema"
 	"github.com/Yoak3n/aimin/blood/schema/ws"
 	"github.com/Yoak3n/aimin/dna/fsm"
@@ -194,6 +196,10 @@ func (wh *WebSocketHub) listen(id string, conn *websocket.Conn) {
 			if err != nil {
 				log.Println("task data unmarshal err:", err)
 			}
+			if taskData.ID == "" {
+				taskData.ID = util.RandomIdWithPrefix("tsk")
+			}
+			logger.Logger.Infof("AddTaskMessage: %v\n", taskData)
 			wh.Tasks <- taskData
 		case ws.AnswerMessage:
 			if ans, ok := messageData.Data.(string); ok {

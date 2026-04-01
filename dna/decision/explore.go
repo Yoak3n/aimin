@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"math/rand/v2"
+	"net/url"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -17,6 +20,7 @@ import (
 	"github.com/Yoak3n/aimin/dna/action"
 	"github.com/Yoak3n/aimin/dna/fsm"
 	"github.com/Yoak3n/aimin/dna/persist"
+	"github.com/Yoak3n/aimin/hand/internet/fetch"
 	"github.com/Yoak3n/aimin/hand/internet/search/duckduckgo"
 )
 
@@ -70,6 +74,7 @@ func makeExploreAction() fsm.WorkAction {
 						"answer":    compactOneLine(strings.Join(answer, " | "), 400),
 					})
 				}
+				progress = 1
 				return fsm.Done
 			}
 		}
@@ -96,6 +101,7 @@ func createExploreQuestionFromGraph(ctx *fsm.Context, candidateLimit int, strate
 	if candidateLimit <= 0 {
 		candidateLimit = 10
 	}
+	logger.Logger.Println("Explore:", strategy, candidateLimit)
 	n4 := helper.UseDB().GetNeuroDB()
 	if n4 == nil {
 		return "请探索：从图数据库中选取一个连接边最少的节点（当前数据库不可用）", "", "", 0
@@ -126,7 +132,7 @@ func generateExploreQuestionByLLM(nodeType string, nodeName string, degree int64
 	case ExploreStrategyWebSearch:
 		systemPrompt = "你是搜索查询生成器。请基于给定目标节点生成一个适合在搜索引擎直接搜索的中文查询串，要求：1) 只输出一行，不要换行；2) 不要写成问句，不要带任何解释；3) 尽量用关键词短语，必要时用空格分隔；4) 必须包含节点名，尽量包含节点类型或等价领域词；5) 可参考噪声上下文挑选更有信息量的限定词，但不要复述上下文。"
 	default:
-		systemPrompt = "你是一个智能体的探索提问生成器。请基于给定目标节点生成一句自然得体的中文提问/任务指令，用于向用户请教或请用户补充信息，要求：1) 只输出一句话，不要换行；2) 语气礼貌、明确且易回答；3) 风格有随机性（可在提问角度/任务形式上变化）；4) 可参考噪声上下文调整角度，但不要复述上下文；5) 不要输出任何额外解释。"
+		systemPrompt = "你是一个智能体的探索提问生成器。请基于给定目标节点生成一句自然得体的中文提问/任务指令，用于向用户请教或请用户补充信息，要求：1) 只输出一句话，不要换行；2) 语气礼貌、明确且易回答，一定要注意提问的边界，如果频繁提到个人隐私问题用户会反感；3) 风格有随机性（可在提问角度/任务形式上变化）；4) 可参考噪声上下文调整角度，但不要复述上下文；5) 不要输出任何额外解释。"
 	}
 	out, err := llm.Chat([]schema.OpenAIMessage{{Role: schema.OpenAIMessageRoleUser, Content: user}}, systemPrompt)
 	if err != nil {
@@ -216,6 +222,7 @@ func askForAnswer(question string, strategy ExploreStrategy) []string {
 	if strategy == ExploreStrategyAskUser {
 		return action.ProactiveAsk(question)
 	}
+	logger.Logger.Println("Ask for answer:", question)
 	// 网络搜索
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
@@ -224,9 +231,16 @@ func askForAnswer(question string, strategy ExploreStrategy) []string {
 		Timeout: 20 * time.Second,
 	})
 	if err != nil {
+		logger.Logger.Errorf("DuckDuckGo Search error: %v\n", err)
+		fb := fallbackSearchByBing(ctx, question)
+		if len(fb) > 0 {
+			logger.Logger.Println("Bing fallback result:", fb)
+			return fb
+		}
+		logger.Logger.Println("No fallback result")
 		return []string{fmt.Sprintf("[DuckDuckGo][错误] %v", err)}
 	}
-
+	logger.Logger.Println("DuckDuckGo Search result:", res)
 	out := make([]string, 0, 16)
 	if s := strings.TrimSpace(res.Heading); s != "" {
 		out = append(out, "[主题] "+s)
@@ -277,9 +291,108 @@ func askForAnswer(question string, strategy ExploreStrategy) []string {
 	}
 
 	if len(out) == 0 {
+		fb := fallbackSearchByBing(ctx, question)
+		if len(fb) > 0 {
+			return fb
+		}
 		return nil
 	}
 	return out
+}
+
+func fallbackSearchByBing(ctx context.Context, q string) []string {
+	base := "https://www.bing.com/search?q="
+
+	link := base + url.QueryEscape(strings.TrimSpace(q))
+	html, _, err := fetch.FetchHTML(ctx, link, &fetch.FetchOptions{Timeout: 18 * time.Second})
+	if err != nil || strings.TrimSpace(html) == "" {
+		logger.Logger.Errorf("Bing fallback fetch error: %v", err)
+		return nil
+	}
+	results := extractBingResults(html, 10)
+	if len(results) == 0 {
+		// 退化到提取纯文本前几行
+		text, err2 := fetch.ExtractText(html)
+		if err2 != nil {
+			return nil
+		}
+		lines := strings.Split(text, "\n")
+		out := make([]string, 0, 48)
+		out = append(out, "[搜索引擎] Bing (fallback)")
+		out = append(out, "[结果]")
+		n := 0
+		for _, ln := range lines {
+			s := strings.TrimSpace(ln)
+			if s == "" || len([]rune(s)) < 8 {
+				continue
+			}
+			out = append(out, "- "+s)
+			n++
+			if n >= 40 {
+				break
+			}
+		}
+		if n == 0 {
+			return nil
+		}
+		return out
+	}
+	out := make([]string, 0, len(results)*4+4)
+	out = append(out, "[搜索引擎] Bing (fallback)")
+	out = append(out, "[结果]")
+	for i, r := range results {
+		out = append(out, fmt.Sprintf("%d) %s", i+1, r.Title))
+		if strings.TrimSpace(r.Snippet) != "" {
+			out = append(out, "   "+r.Snippet)
+		}
+	}
+	return out
+}
+
+type bingResult struct {
+	Title   string
+	URL     string
+	Snippet string
+}
+
+func extractBingResults(htmlText string, max int) []bingResult {
+	blockRe := regexp.MustCompile(`(?is)<li[^>]*class="b_algo"[^>]*>.*?</li>`)
+	blocks := blockRe.FindAllString(htmlText, max)
+	out := make([]bingResult, 0, len(blocks))
+
+	linkRe := regexp.MustCompile(`(?is)<h2[^>]*>.*?<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>.*?</h2>`)
+	snippetRe := regexp.MustCompile(`(?is)<div[^>]*class="b_caption"[^>]*>.*?<p[^>]*>(.*?)</p>`)
+	fallbackSnippetRe := regexp.MustCompile(`(?is)<p[^>]*>(.*?)</p>`)
+
+	for _, blk := range blocks {
+		m := linkRe.FindStringSubmatch(blk)
+		if len(m) < 3 {
+			continue
+		}
+		rawURL := strings.TrimSpace(html.UnescapeString(m[1]))
+		title := cleanBingText(m[2])
+		if title == "" {
+			continue
+		}
+
+		snippet := ""
+		if sm := snippetRe.FindStringSubmatch(blk); len(sm) >= 2 {
+			snippet = cleanBingText(sm[1])
+		} else if sm := fallbackSnippetRe.FindStringSubmatch(blk); len(sm) >= 2 {
+			snippet = cleanBingText(sm[1])
+		}
+		out = append(out, bingResult{Title: title, URL: rawURL, Snippet: snippet})
+	}
+	return out
+}
+
+func cleanBingText(s string) string {
+	re := regexp.MustCompile(`(?s)<[^>]+>`)
+	s = re.ReplaceAllString(s, " ")
+	s = html.UnescapeString(s)
+	s = strings.ReplaceAll(s, "\u00a0", " ")
+	s = strings.Join(strings.Fields(s), " ")
+	return strings.TrimSpace(s)
 }
 
 func isAskUserNoClientAnswer(answer []string) bool {
@@ -302,7 +415,7 @@ type tripleExtractionResponse struct {
 }
 
 func handleExploreAnswer(question string, answer []string, nodeType string, nodeName string) bool {
-	if answer == nil {
+	if answer == nil || strings.HasPrefix(answer[0], "[DuckDuckGo][错误]") {
 		return false
 	}
 
@@ -339,7 +452,7 @@ func extractTriplesByLLM(question string, answer string, nodeType string, nodeNa
 
 你会收到一次探索记录：
 - Node：当前探索的图谱节点（type/name）
-- Question：用于探索/搜索的问题（可能是搜索查询串或自然问题）
+- Question：agent（也就是你自己）用于探索/搜索的问题（可能是搜索查询串或自然问题）
 - Answer：通过网络搜索或用户回答得到的内容（多行）
 
 你的任务：仅从 Answer 中抽取可以写入知识图谱的关系，输出三（五）元组列表。

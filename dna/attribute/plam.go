@@ -2,9 +2,8 @@ package attribute
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -99,79 +98,42 @@ func (m *MinAttribute) saveCacheLocked() {
 		m.Lifespan += nl.Seconds()
 	}
 	m.LastUpdate = time.Now().Unix()
-	buf, _ := json.Marshal(m)
-	fp, err := os.Open(fmt.Sprintf("%s/attribute.json", attributePath))
+	buf, err := json.Marshal(m)
 	if err != nil {
 		return
 	}
-	defer fp.Close()
-	_, err = fp.Write(buf)
+	filePath := filepath.Join(attributePath, "attribute.json")
+	_ = util.CreateDirNotExists(attributePath)
+	_ = os.WriteFile(filePath, buf, 0644)
 }
 
 func loadFromCache() MinAttribute {
-	_, err := os.ReadDir(attributePath)
-	if err != nil {
-		buf, e := os.ReadFile(fmt.Sprintf("%s/attribute.json", attributePath))
-		if e != nil {
-			a := MinAttribute{}
-			err = json.Unmarshal(buf, &a)
-			if err != nil {
-				return defaultAttribute()
-			}
-			return MinAttribute{
-				Curiosity:  a.Curiosity,
-				Energy:     a.Energy,
-				Openness:   a.Openness,
-				Lifespan:   a.Lifespan,
-				LastUpdate: a.LastUpdate,
-			}
-		}
-		return defaultAttribute()
-	} else if errors.Is(err, os.ErrNotExist) {
-		e := util.CreateDirNotExists(attributePath)
+	filePath := filepath.Join(attributePath, "attribute.json")
+	_ = util.CreateDirNotExists(attributePath)
+	buf, err := os.ReadFile(filePath)
+	if err != nil || len(buf) == 0 {
 		a := defaultAttribute()
-		if e != nil {
-			return MinAttribute{
-				Curiosity:  a.Curiosity,
-				Energy:     a.Energy,
-				Openness:   a.Openness,
-				Lifespan:   a.Lifespan,
-				LastUpdate: a.LastUpdate,
-			}
+		if b, e := json.Marshal(&a); e == nil {
+			_ = util.CreateFileNotExists(filePath, b)
 		}
-		buf, e := json.Marshal(&a)
-		if e != nil {
-			return MinAttribute{
-				Curiosity:  a.Curiosity,
-				Energy:     a.Energy,
-				Openness:   a.Openness,
-				Lifespan:   a.Lifespan,
-				LastUpdate: a.LastUpdate,
-			}
-		}
-		fp, e := os.Create(fmt.Sprintf("%s/attribute.json", attributePath))
-		if e != nil {
-			return MinAttribute{
-				Curiosity:  a.Curiosity,
-				Energy:     a.Energy,
-				Openness:   a.Openness,
-				Lifespan:   a.Lifespan,
-				LastUpdate: a.LastUpdate,
-			}
-		}
-		defer fp.Close()
-		_, e = fp.Write(buf)
-		if e != nil {
-			return MinAttribute{
-				Curiosity:  a.Curiosity,
-				Energy:     a.Energy,
-				Openness:   a.Openness,
-				Lifespan:   a.Lifespan,
-				LastUpdate: a.LastUpdate,
-			}
-		}
+		return a
 	}
-	return defaultAttribute()
+
+	var a MinAttribute
+	if err := json.Unmarshal(buf, &a); err != nil {
+		da := defaultAttribute()
+		if b, e := json.Marshal(&da); e == nil {
+			_ = os.WriteFile(filePath, b, 0644)
+		}
+		return da
+	}
+	return MinAttribute{
+		Curiosity:  a.Curiosity,
+		Energy:     a.Energy,
+		Openness:   a.Openness,
+		Lifespan:   a.Lifespan,
+		LastUpdate: a.LastUpdate,
+	}
 }
 
 func defaultAttribute() MinAttribute {
