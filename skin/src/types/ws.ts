@@ -26,8 +26,19 @@ export type WsCloseMessage = WsMessage<"Close", "Close" | string>;
 export type WsPingMessage = WsMessage<"Ping", "Ping" | string>;
 export type WsPongMessage = WsMessage<"Pong", "Pong" | string>;
 
-export type WsAskMessage = WsMessage<"Ask", string>;
-export type WsAnswerMessage = WsMessage<"Answer", string>;
+export interface WsAskMessageData {
+  id: string;
+  content: string;
+}
+
+export interface WsAnswerMessageData {
+  id: string;
+  content?: string;
+  skip?: boolean;
+}
+
+export type WsAskMessage = WsMessage<"Ask", WsAskMessageData>;
+export type WsAnswerMessage = WsMessage<"Answer", WsAnswerMessageData>;
 
 export type WsTaskType = 0 | 1;
 

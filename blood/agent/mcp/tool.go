@@ -13,7 +13,7 @@ type Tool struct {
 }
 
 func (m *Tool) String() string {
-	return fmt.Sprintf("- %s: %s", m.Name, m.Desc)
+	return fmt.Sprintf("<tool><name>%s</name><desc>%s</desc></tool>", m.Name, m.Desc)
 }
 
 func GetMcpTools() []*Tool {

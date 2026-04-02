@@ -318,7 +318,7 @@ func ProcessOne(ctx context.Context, rawURL string, opt *ProcessOptions) (*PageR
 	usedJSFromStart := false
 	res, err := Fetch(ctx, rawURL, nil)
 	if cfg.JSFallback && isGoogleSearchURL(rawURL) {
-		rendered, rerr := RenderWithChromedp(ctx, rawURL, &RenderOptions{Timeout: cfg.JSTimeout, Scroll: true})
+		rendered, rerr := renderHTMLWithFallbackContext(ctx, rawURL, cfg.JSTimeout)
 		if rerr == nil && strings.TrimSpace(rendered) != "" {
 			usedJSFromStart = true
 			res = &FetchResult{
@@ -336,7 +336,7 @@ func ProcessOne(ctx context.Context, rawURL string, opt *ProcessOptions) (*PageR
 		}
 	}
 	if err != nil && cfg.JSFallback {
-		rendered, rerr := RenderWithChromedp(ctx, rawURL, &RenderOptions{Timeout: cfg.JSTimeout, Scroll: true})
+		rendered, rerr := renderHTMLWithFallbackContext(ctx, rawURL, cfg.JSTimeout)
 		if rerr == nil && strings.TrimSpace(rendered) != "" {
 			usedJSFromStart = true
 			res = &FetchResult{
@@ -403,7 +403,7 @@ func ProcessOne(ctx context.Context, rawURL string, opt *ProcessOptions) (*PageR
 		}
 
 		if cfg.JSFallback && !usedJSFromStart && looksLikeLowContent(text, cfg.LowTextChars) {
-			rendered, rerr := RenderWithChromedp(ctx, finalURL, &RenderOptions{Timeout: cfg.JSTimeout, Scroll: true})
+			rendered, rerr := renderHTMLWithFallbackContext(ctx, finalURL, cfg.JSTimeout)
 			if rerr == nil && strings.TrimSpace(rendered) != "" {
 				usedJS = true
 				if saveFiles && base != "" {
@@ -477,6 +477,14 @@ func isGoogleSearchURL(rawURL string) bool {
 		return false
 	}
 	return true
+}
+
+func renderHTMLWithFallbackContext(ctx context.Context, rawURL string, timeout time.Duration) (string, error) {
+	use := ctx
+	if use == nil || use.Err() != nil {
+		use = context.Background()
+	}
+	return RenderWithChromedp(use, rawURL, &RenderOptions{Timeout: timeout, Scroll: true})
 }
 
 type CrawlOptions struct {

@@ -1,23 +1,27 @@
 package ws
 
 import (
+	"sync"
+
 	"github.com/gorilla/websocket"
 )
 
-func (wh *WebSocketHub) handle(pendingQuestions []*QuestionRequest) {
-	var currentQuestion *QuestionRequest
+func (wh *WebSocketHub) handle() {
+	pendingMu := sync.Mutex{}
+	pending := map[string]*QuestionRequest{}
 	for {
 		select {
 		// 客户端注册事件
 		case client := <-wh.register:
 			wh.registerClient(client)
-			// Attempt to send current or pending question to the new client
-			if currentQuestion != nil {
-				wh.sendQuestionToClient(currentQuestion, client)
-			} else if len(pendingQuestions) > 0 {
-				currentQuestion = pendingQuestions[0]
-				pendingQuestions = pendingQuestions[1:]
-				wh.sendQuestion(currentQuestion)
+			pendingMu.Lock()
+			items := make([]*QuestionRequest, 0, len(pending))
+			for _, q := range pending {
+				items = append(items, q)
+			}
+			pendingMu.Unlock()
+			for _, q := range items {
+				wh.sendQuestionToClient(q, client)
 			}
 		// 客户端注销事件
 		case id := <-wh.unregister:
@@ -44,34 +48,38 @@ func (wh *WebSocketHub) handle(pendingQuestions []*QuestionRequest) {
 			}
 		// 主动交互提问事件
 		case req := <-wh.AskChan:
-			pendingQuestions = append(pendingQuestions, req)
-			wh.clientsMu.RLock()
-			hasClient := len(wh.clients) > 0
-			wh.clientsMu.RUnlock()
-			if currentQuestion == nil && hasClient {
-				currentQuestion = pendingQuestions[0]
-				pendingQuestions = pendingQuestions[1:]
-				wh.sendQuestion(currentQuestion)
+			if req == nil || req.ID == "" {
+				continue
 			}
+			pendingMu.Lock()
+			pending[req.ID] = req
+			pendingMu.Unlock()
+			wh.sendQuestion(req)
 		// 主动交互回复事件
-		case answer := <-wh.AnswerChan:
-			if currentQuestion != nil {
-				// Non-blocking send to avoid deadlock if receiver is gone
+		case ans := <-wh.AnswerChan:
+			id := ans.ID
+			if id == "" {
+				continue
+			}
+			pendingMu.Lock()
+			req, ok := pending[id]
+			if ok {
+				delete(pending, id)
+			}
+			pendingMu.Unlock()
+			if ok && req != nil {
 				select {
-				case currentQuestion.AnswerCh <- answer:
+				case req.AnswerCh <- QuestionResult{Answer: ans.Content, Skipped: ans.Skip}:
 				default:
 				}
-				currentQuestion = nil
-				// Send next question if any
-				wh.clientsMu.RLock()
-				hasClient := len(wh.clients) > 0
-				wh.clientsMu.RUnlock()
-				if len(pendingQuestions) > 0 && hasClient {
-					currentQuestion = pendingQuestions[0]
-					pendingQuestions = pendingQuestions[1:]
-					wh.sendQuestion(currentQuestion)
-				}
 			}
+		case id := <-wh.CancelAsk:
+			if id == "" {
+				continue
+			}
+			pendingMu.Lock()
+			delete(pending, id)
+			pendingMu.Unlock()
 		case state := <-wh.State:
 			wh.broadcastState(state)
 		}

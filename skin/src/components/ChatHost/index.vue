@@ -10,6 +10,44 @@
         <button class="chat-host__system-btn" type="button" @click="clearSystemNotices">Clear</button>
       </div>
 
+      <div v-if="pendingQuestions.length" class="chat-host__section chat-host__questions">
+        <div class="chat-host__section-header">
+          <div class="chat-host__section-title">Inbox</div>
+          <div class="chat-host__section-meta">{{ pendingQuestions.length }}</div>
+          <button class="chat-host__system-btn" type="button" @click="clearQuestions">Clear</button>
+        </div>
+
+        <div class="chat-host__questions-list">
+          <button
+            v-for="q in visibleQuestions"
+            :key="q.id"
+            class="chat-host__question"
+            type="button"
+            :data-active="q.id === selectedQuestionId"
+            @click="selectQuestion(q.id)"
+          >
+            <div class="chat-host__question-title">{{ compactLine(q.content, 60) }}</div>
+            <div class="chat-host__question-meta">{{ formatTime(q.time) }}</div>
+          </button>
+        </div>
+
+        <div v-if="selectedQuestion" class="chat-host__question-editor">
+          <div class="chat-host__question-full">{{ selectedQuestion.content }}</div>
+          <textarea
+            v-model="draftAnswer"
+            class="chat-host__question-input"
+            rows="3"
+            placeholder="输入回答，或选择 Skip"
+          />
+          <div class="chat-host__question-actions">
+            <button class="chat-host__system-btn" type="button" :disabled="!canSubmitAnswer" @click="submitAnswer">
+              Send
+            </button>
+            <button class="chat-host__system-btn" type="button" @click="skipSelected">Skip</button>
+          </div>
+        </div>
+      </div>
+
       <div v-if="latestState" class="chat-host__section chat-host__state">
         <div class="chat-host__section-header">
           <div class="chat-host__section-title">State</div>
@@ -72,7 +110,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import Chat from "@/components/Chat/index.vue";
 import { useAppStore } from "@/store/module/app";
-import type { WsIncomingMessage, WsLogMessageData } from "@/types/ws";
+import type { WsAskMessageData, WsIncomingMessage, WsLogMessageData } from "@/types/ws";
 
 type ChatExposed = {
   receiveWsMessage: (message: WsIncomingMessage) => void;
@@ -90,6 +128,12 @@ type StateSnapshot = {
   content: string;
 };
 
+type PendingQuestion = {
+  id: string;
+  time: number;
+  content: string;
+};
+
 const appStore = useAppStore();
 const chatRef = ref<ChatExposed | null>(null);
 
@@ -98,6 +142,10 @@ const latestState = ref<StateSnapshot | null>(null);
 
 const logItems = ref<SystemNotice[]>([]);
 const isLogExpanded = ref(false);
+
+const pendingQuestions = ref<PendingQuestion[]>([]);
+const selectedQuestionId = ref<string>("");
+const draftAnswer = ref("");
 
 function now() {
   return Date.now();
@@ -128,6 +176,18 @@ function clearSystemNotices() {
   systemNotices.value = [];
   logItems.value = [];
   latestState.value = null;
+}
+
+function compactLine(s: string, maxRunes: number) {
+  const normalized = String(s ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (maxRunes <= 0) return normalized;
+  const rs = Array.from(normalized);
+  if (rs.length <= maxRunes) return normalized;
+  return `${rs.slice(0, maxRunes).join("")}...`;
 }
 
 function normalizeLogData(data: WsLogMessageData | unknown) {
@@ -183,6 +243,30 @@ function handleSystemMessage(message: WsIncomingMessage) {
   return false;
 }
 
+function normalizeAskData(data: unknown): WsAskMessageData | null {
+  if (!data || typeof data !== "object") return null;
+  const maybe = data as { id?: unknown; content?: unknown };
+  if (typeof maybe.id !== "string" || typeof maybe.content !== "string") return null;
+  const id = maybe.id.trim();
+  const content = maybe.content.trim();
+  if (!id || !content) return null;
+  return { id, content };
+}
+
+function handleAskMessage(message: WsIncomingMessage) {
+  if (message.action !== "Ask") return false;
+  const data = normalizeAskData(message.data);
+  if (!data) return true;
+  const exists = pendingQuestions.value.some((q) => q.id === data.id);
+  if (!exists) {
+    pendingQuestions.value.push({ id: data.id, content: data.content, time: now() });
+    if (!selectedQuestionId.value) {
+      selectedQuestionId.value = data.id;
+    }
+  }
+  return true;
+}
+
 function dispatchToChat(message: WsIncomingMessage) {
   chatRef.value?.receiveWsMessage(message);
 }
@@ -195,6 +279,7 @@ onMounted(() => {
   }
 
   unsubscribe = appStore.onIncomingMessage((message) => {
+    if (handleAskMessage(message)) return;
     if (handleSystemMessage(message)) return;
     dispatchToChat(message);
   });
@@ -225,11 +310,72 @@ const visibleLogs = computed(() => {
 });
 
 const hasSystemPanel = computed(() => {
-  return Boolean(latestState.value) || logCount.value > 0 || visibleSystemNotices.value.length > 0;
+  return (
+    pendingQuestions.value.length > 0 ||
+    Boolean(latestState.value) ||
+    logCount.value > 0 ||
+    visibleSystemNotices.value.length > 0
+  );
 });
 
 function toggleLogs() {
   isLogExpanded.value = !isLogExpanded.value;
+}
+
+const visibleQuestions = computed(() => {
+  const list = pendingQuestions.value;
+  if (list.length <= 12) return list;
+  return list.slice(list.length - 12);
+});
+
+const selectedQuestion = computed(() => {
+  const id = selectedQuestionId.value;
+  if (!id) return null;
+  return pendingQuestions.value.find((q) => q.id === id) ?? null;
+});
+
+const canSubmitAnswer = computed(() => {
+  return Boolean(selectedQuestion.value) && draftAnswer.value.trim().length > 0;
+});
+
+function selectQuestion(id: string) {
+  selectedQuestionId.value = id;
+  draftAnswer.value = "";
+}
+
+function removeQuestion(id: string) {
+  const idx = pendingQuestions.value.findIndex((q) => q.id === id);
+  if (idx >= 0) pendingQuestions.value.splice(idx, 1);
+  if (selectedQuestionId.value === id) {
+    selectedQuestionId.value = pendingQuestions.value.length ? pendingQuestions.value[pendingQuestions.value.length - 1].id : "";
+  }
+}
+
+function clearQuestions() {
+  for (const q of pendingQuestions.value) {
+    appStore.skipAnswer(q.id);
+  }
+  pendingQuestions.value = [];
+  selectedQuestionId.value = "";
+  draftAnswer.value = "";
+}
+
+function submitAnswer() {
+  const q = selectedQuestion.value;
+  if (!q) return;
+  const content = draftAnswer.value.trim();
+  if (!content) return;
+  appStore.sendAnswer({ id: q.id, content });
+  draftAnswer.value = "";
+  removeQuestion(q.id);
+}
+
+function skipSelected() {
+  const q = selectedQuestion.value;
+  if (!q) return;
+  appStore.skipAnswer(q.id);
+  draftAnswer.value = "";
+  removeQuestion(q.id);
 }
 </script>
 
@@ -346,6 +492,72 @@ function toggleLogs() {
   border-radius: 10px;
   background: #fafafa;
   border: 1px solid #ededed;
+}
+
+.chat-host__questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-host__question {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #e5e5e5;
+  background: #fff;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.chat-host__question[data-active="true"] {
+  border-color: #c9ddff;
+  background: #f4f9ff;
+}
+
+.chat-host__question-title {
+  font-size: 12px;
+  opacity: 0.9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-host__question-meta {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.chat-host__question-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-host__question-full {
+  font-size: 12px;
+  opacity: 0.9;
+  white-space: pre-wrap;
+}
+
+.chat-host__question-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #e5e5e5;
+  background: #fff;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.chat-host__question-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .chat-host__system-item {

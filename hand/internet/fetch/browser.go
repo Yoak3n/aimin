@@ -20,8 +20,8 @@ func defaultRenderOptions() RenderOptions {
 		Timeout:     30 * time.Second,
 		Scroll:      true,
 		ScrollTimes: 6,
-		ScrollDelta: 1200,
-		ScrollWait:  400 * time.Millisecond,
+		ScrollDelta: 800,
+		ScrollWait:  600 * time.Millisecond,
 	}
 }
 
@@ -50,7 +50,7 @@ func RenderWithChromedp(ctx context.Context, rawURL string, opt *RenderOptions) 
 	defer cancel()
 
 	allocatorOpts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", false),
+		chromedp.Flag("headless", true),
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("no-sandbox", true),
 		chromedp.Flag("disable-blink-features", "AutomationControlled"),

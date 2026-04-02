@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/Yoak3n/aimin/blood/agent"
+	"github.com/Yoak3n/aimin/blood/agent/workspace"
 	"github.com/Yoak3n/aimin/blood/schema"
 	schemaws "github.com/Yoak3n/aimin/blood/schema/ws"
 	"github.com/Yoak3n/aimin/nerve"
@@ -14,7 +15,7 @@ import (
 var WSReplyBroadcast func(clientID string, message []byte)
 
 func NewConversationTask(id, from string) *agent.ConversationAgent {
-	base := agent.NewAgent()
+	base := agent.NewAgent(workspace.PromptPurposeReAct)
 	conv := agent.NewConversationAgent(base)
 	conv.SetMaxTurns(8)
 	chunkIdx := 1

@@ -22,16 +22,20 @@ type RunResult struct {
 }
 
 type ReActAgent struct {
-	Mcp   *mcp.McpHUB
-	Skill *skill.SkillHUB
-	Hooks *AgentHooks
+	Mcp     *mcp.McpHUB
+	Skill   *skill.SkillHUB
+	Hooks   *AgentHooks
+	purpose workspace.PromptPurpose
+	choice  workspace.ContextChoice
 }
 
-func NewAgent() *ReActAgent {
+func NewAgent(purpose workspace.PromptPurpose) *ReActAgent {
 	a := &ReActAgent{
-		Mcp:   mcp.GlobalMcpHUB(),
-		Skill: skill.NewSkillHUB(),
-		Hooks: NewAgentHooks(),
+		Mcp:     mcp.GlobalMcpHUB(),
+		Skill:   skill.NewSkillHUB(),
+		Hooks:   NewAgentHooks(),
+		purpose: purpose,
+		choice:  workspace.Normal,
 	}
 	a.RegisterTool(mcp.FileOperationTool())
 	a.RegisterTool(mcp.ShellCommandTool())
@@ -42,9 +46,12 @@ func NewAgent() *ReActAgent {
 	a.RegisterTool(mcp.WebTool())
 	if workspace.EnsureWorkspace() {
 		fmt.Println("第一次运行，初始化工作空间")
-
 	}
 	return a
+}
+
+func (a *ReActAgent) SetContextChoice(choice workspace.ContextChoice) {
+	a.choice = choice
 }
 
 func (a *ReActAgent) RegisterTool(tool *mcp.Tool) {
@@ -96,10 +103,10 @@ func (a *ReActAgent) RunWithMessages(messages []schema.OpenAIMessage) (RunResult
 	if len(messages) == 0 {
 		return RunResult{}, errors.New("messages 不能为空")
 	}
-	wc := workspace.NewWorkspaceContext()
+	wc := workspace.NewWorkspaceContextForPurpose(a.purpose)
 	thoughts := make([]string, 0, 8)
 	for {
-		sp := wc.String()
+		sp := wc.String(a.choice)
 		_ = os.WriteFile("sp.md", []byte(sp), 0644)
 		var onDelta func(string) error
 		if len(hooks.AssistantDeltaHandlers) > 0 {

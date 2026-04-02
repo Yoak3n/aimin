@@ -7,8 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Yoak3n/aimin/blood/config"
 	handfetch "github.com/Yoak3n/aimin/hand/internet/fetch"
-	"github.com/Yoak3n/aimin/hand/internet/search/duckduckgo"
+	handsearch "github.com/Yoak3n/aimin/hand/internet/search"
 )
 
 func Web(ctx *Context) string {
@@ -133,35 +134,30 @@ func webSearch(ctx *Context, args map[string]string) string {
 		defer cancel()
 	}
 
-	res, err := duckduckgo.Search(cctx, query, &duckduckgo.Options{Timeout: timeout})
+	cookie := config.GlobalConfiguration().Internet.BilibiliCookie
+	items, err := handsearch.Search(cctx, query, &handsearch.Options{
+		Limit:          limit,
+		Timeout:        timeout,
+		PreferBrowser:  true,
+		BilibiliCookie: cookie,
+	})
 	if err != nil {
 		return "ERROR: " + err.Error()
 	}
-
-	items := make([]duckduckgo.ResultItem, 0, len(res.Results)+len(res.RelatedTopics))
-	items = append(items, res.Results...)
-	items = append(items, res.RelatedTopics...)
-	if len(items) > limit {
-		items = items[:limit]
+	if len(items) == 0 {
+		return "ERROR: empty result"
 	}
 
 	sb := strings.Builder{}
 	sb.WriteString("<web_search>\n")
+	fmt.Fprintf(&sb, "<engine>%s</engine>\n", string(items[0].Provider))
 	fmt.Fprintf(&sb, "<query>%s</query>\n", xmlTextCompact(query, 400))
-	if strings.TrimSpace(res.Heading) != "" {
-		fmt.Fprintf(&sb, "<heading>%s</heading>\n", xmlTextCompact(res.Heading, 400))
-	}
-	if strings.TrimSpace(res.AbstractText) != "" {
-		sb.WriteString("<abstract><![CDATA[")
-		sb.WriteString(sanitizeCDATA(res.AbstractText))
-		sb.WriteString("]]></abstract>\n")
-	}
 	sb.WriteString("<results>\n")
 	for _, it := range items {
 		sb.WriteString("<item>\n")
-		fmt.Fprintf(&sb, "<url>%s</url>\n", xmlTextCompact(it.FirstURL, 800))
+		fmt.Fprintf(&sb, "<url>%s</url>\n", xmlTextCompact(it.URL, 800))
 		sb.WriteString("<snippet><![CDATA[")
-		sb.WriteString(sanitizeCDATA(it.Text))
+		sb.WriteString(sanitizeCDATA(strings.TrimSpace(it.Title + "\n" + it.Snippet)))
 		sb.WriteString("]]></snippet>\n")
 		sb.WriteString("</item>\n")
 	}

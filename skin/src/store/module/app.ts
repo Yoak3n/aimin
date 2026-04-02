@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import type { WsIncomingMessage, WsOutgoingMessage, WsTaskType } from "@/types/ws";
+import type { WsAnswerMessageData, WsIncomingMessage, WsOutgoingMessage, WsTaskType } from "@/types/ws";
 
 export const useAppStore = defineStore("app", {
   state: () => ({
@@ -68,8 +68,11 @@ export const useAppStore = defineStore("app", {
     sendPing(payload: string = "Ping") {
       this.sendMessage({ action: "Ping", data: payload });
     },
-    sendAnswer(answer: string) {
-      this.sendMessage({ action: "Answer", data: answer });
+    sendAnswer(payload: WsAnswerMessageData) {
+      this.sendMessage({ action: "Answer", data: payload });
+    },
+    skipAnswer(id: string) {
+      this.sendAnswer({ id, skip: true });
     },
     sendTask(payload: string, taskType: WsTaskType = 0) {
       this.sendMessage({ action: "Task", data: { type: taskType, payload, from: this.clientId } });

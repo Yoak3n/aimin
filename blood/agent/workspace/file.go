@@ -20,6 +20,7 @@ type ContextChoice int8
 const (
 	Normal ContextChoice = iota
 	Remote
+	Single
 )
 
 func makeFileSpecMap(choose ContextChoice) map[string]FileSpec {
@@ -103,10 +104,9 @@ func makeFileSpecMap(choose ContextChoice) map[string]FileSpec {
 		setRequired(ret, "TASKS.md")
 		setRequired(ret, "BOOT.md")
 		setRequired(ret, "TOOLS.md")
-		// 从今天开始往前算的天数
-		for _, spec := range diaryFiles() {
-			ret[spec.Name] = spec
-		}
+	case Single:
+		setRequired(ret, "AGENTS.md")
+		setRequired(ret, "MEMORY.md")
 	}
 	return ret
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,9 +19,21 @@ import (
 )
 
 type QuestionRequest struct {
+	ID       string
 	Content  string
-	AnswerCh chan string
+	AnswerCh chan QuestionResult
 	Ctx      context.Context
+}
+
+type QuestionResult struct {
+	Answer  string
+	Skipped bool
+}
+
+type AnswerPayload struct {
+	ID      string `json:"id"`
+	Content string `json:"content"`
+	Skip    bool   `json:"skip"`
 }
 
 type WebSocketHub struct {
@@ -31,8 +44,9 @@ type WebSocketHub struct {
 	broadcast  chan []byte
 	// 任务发送通道
 	Tasks      chan schema.TaskData
-	AnswerChan chan string
+	AnswerChan chan AnswerPayload
 	AskChan    chan *QuestionRequest
+	CancelAsk  chan string
 	State      chan string
 }
 
@@ -68,23 +82,26 @@ func NewWebSocketHub() *WebSocketHub {
 		unregister: make(chan string),
 		broadcast:  make(chan []byte),
 		Tasks:      make(chan schema.TaskData, 100),
-		AnswerChan: make(chan string),
+		AnswerChan: make(chan AnswerPayload),
 		AskChan:    make(chan *QuestionRequest),
+		CancelAsk:  make(chan string),
 		State:      make(chan string, 1000),
 	}
 }
 
 func (wh *WebSocketHub) Run() {
 	go wh.sendTask()
-	pendingQuestions := make([]*QuestionRequest, 0, 100)
-	go wh.handle(pendingQuestions)
+	go wh.handle()
 
 }
 
 func (wh *WebSocketHub) sendQuestion(req *QuestionRequest) {
 	msg := ws.WebsocketMessage{
 		Action: ws.AskMessage,
-		Data:   req.Content,
+		Data: map[string]any{
+			"id":      req.ID,
+			"content": req.Content,
+		},
 	}
 	buf, _ := json.Marshal(msg)
 	// Broadcast to all clients (or specific logic if needed)
@@ -111,7 +128,10 @@ func (wh *WebSocketHub) sendQuestion(req *QuestionRequest) {
 func (wh *WebSocketHub) sendQuestionToClient(req *QuestionRequest, client *Client) {
 	msg := ws.WebsocketMessage{
 		Action: ws.AskMessage,
-		Data:   req.Content,
+		Data: map[string]any{
+			"id":      req.ID,
+			"content": req.Content,
+		},
 	}
 	buf, _ := json.Marshal(msg)
 	if err := client.conn.WriteMessage(websocket.TextMessage, buf); err != nil {
@@ -202,12 +222,17 @@ func (wh *WebSocketHub) listen(id string, conn *websocket.Conn) {
 			logger.Logger.Infof("AddTaskMessage: %v\n", taskData)
 			wh.Tasks <- taskData
 		case ws.AnswerMessage:
-			if ans, ok := messageData.Data.(string); ok {
-				wh.AnswerChan <- ans
-			} else {
-				// Try to convert if it's not directly a string (e.g. interface{})
-				wh.AnswerChan <- fmt.Sprint(messageData.Data)
+			payload := AnswerPayload{}
+			switch v := messageData.Data.(type) {
+			case map[string]any:
+				buf, _ := json.Marshal(v)
+				_ = json.Unmarshal(buf, &payload)
+			case string:
+				payload.Content = v
+			default:
+				payload.Content = fmt.Sprint(messageData.Data)
 			}
+			wh.AnswerChan <- payload
 		}
 		wh.clientsMu.RLock()
 		client, ok := wh.clients[id]
@@ -294,8 +319,9 @@ func (wh *WebSocketHub) Ask(ctx context.Context, question string) []string {
 		return []string{"[AskUser][无客户端] 当前没有连接的 WebSocket 客户端，无法向用户提问。"}
 	}
 
-	answerCh := make(chan string)
+	answerCh := make(chan QuestionResult, 1)
 	req := &QuestionRequest{
+		ID:       util.RandomIdWithPrefix("qst"),
 		Content:  question,
 		AnswerCh: answerCh,
 		Ctx:      ctx,
@@ -303,9 +329,19 @@ func (wh *WebSocketHub) Ask(ctx context.Context, question string) []string {
 	wh.AskChan <- req
 
 	select {
-	case answer := <-answerCh:
-		return []string{answer}
+	case res := <-answerCh:
+		if res.Skipped {
+			return nil
+		}
+		if strings.TrimSpace(res.Answer) == "" {
+			return nil
+		}
+		return []string{res.Answer}
 	case <-ctx.Done():
+		select {
+		case wh.CancelAsk <- req.ID:
+		default:
+		}
 		return nil
 	}
 }

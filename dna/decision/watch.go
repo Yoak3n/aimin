@@ -14,13 +14,15 @@ func NewWatchNode(check func(ctx *fsm.Context) bool) *fsm.WorkState {
 }
 
 func makeWatchAction() fsm.WorkAction {
+	progress := 1
 	return func(ctx *fsm.Context) string {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
-		for range 1 {
-			logger.Logger.Println("I'm watching:", ctx.Current)
+		for i := progress; i <= 3; i++ {
+			logger.Logger.Println("I'm watching:", ctx.Current, i)
 			<-ticker.C
 		}
+		progress = 1
 		ctx.Attr.AddEnergy(-1)
 		ctx.Attr.AddCuriosity(-2)
 		ctx.Attr.AddOpenness(-3)

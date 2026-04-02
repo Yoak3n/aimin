@@ -80,7 +80,6 @@ const appStore = useAppStore();
 const listEl = ref<HTMLElement | null>(null);
 const draft = ref("");
 const isSending = ref(false);
-const awaitingAnswer = ref(false);
 const messages = ref<ChatMessage[]>([]);
 
 const taskToMessageId = new Map<string, string>();
@@ -218,8 +217,6 @@ function handleIncoming(message: WsIncomingMessage) {
   }
 
   if (message.action === "Ask") {
-    awaitingAnswer.value = true;
-    pushMessage({ role: "agent", content: String(message.data ?? "") });
     return;
   }
 
@@ -249,12 +246,6 @@ async function send() {
   try {
     pushMessage({ role: "user", content: text });
     draft.value = "";
-
-    if (awaitingAnswer.value) {
-      appStore.sendAnswer(text);
-      awaitingAnswer.value = false;
-      return;
-    }
 
     appStore.sendTask(text, 0);
   } finally {

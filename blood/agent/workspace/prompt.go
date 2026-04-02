@@ -34,7 +34,7 @@ const ReActPromptTmpl = `# 角色定义和基本原则
 - 当任务需要特定领域能力时，优先查看“技能列表”并选择最相关的技能
 - 若恰好一个技能明显适用：使用 use_skill(skill_name) 激活它，然后严格遵循该技能的Instructions
 - 若当前技能不再相关，后续步骤应回到通用执行（必要时重新选择技能,使用use_skill("...")来表示不再需要使用技能）
-技能列表（动态注入）：
+### 技能列表（动态注入）：
 
 {skills_description}
 
@@ -47,10 +47,6 @@ const ReActPromptTmpl = `# 角色定义和基本原则
 ### 工作空间文件（已注入）
 以下上下文文件可能已被注入（内容可能被截断）：
 {workspace_context}
-
-## 心跳检查
-- 若在“工作空间上下文（已注入）”中包含 HEARTBEAT.md，则严格遵循其中指令
-- 若未包含且当前无须执行任何动作，则回复：<final_answer>HEARTBEAT_OK</final_answer>
 
 ## 静默回复
 - 当你没有任何要说且无需执行工具时，只回复：<final_answer>NO_REPLY</final_answer>

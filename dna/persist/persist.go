@@ -37,7 +37,7 @@ func NewPersistStore() *PersistStore {
 }
 
 func (p *PersistStore) Append(channel string, data map[string]any) {
-	p.AppendWithLimits(channel, data, 40, 2000)
+	p.AppendWithLimits(channel, data, 15, 2000)
 }
 
 func (p *PersistStore) AppendWithLimits(channel string, data map[string]any, keep int, maxSummaryChars int) {

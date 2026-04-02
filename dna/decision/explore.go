@@ -4,14 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html"
 	"math/rand/v2"
-	"net/url"
-	"regexp"
 	"strings"
 	"time"
 	"unicode"
 
+	"github.com/Yoak3n/aimin/blood/config"
+	neo4j "github.com/Yoak3n/aimin/blood/dao/neo4j"
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/blood/pkg/util"
@@ -20,8 +19,9 @@ import (
 	"github.com/Yoak3n/aimin/dna/action"
 	"github.com/Yoak3n/aimin/dna/fsm"
 	"github.com/Yoak3n/aimin/dna/persist"
-	"github.com/Yoak3n/aimin/hand/internet/fetch"
-	"github.com/Yoak3n/aimin/hand/internet/search/duckduckgo"
+	"github.com/Yoak3n/aimin/hand/interactive"
+	handsearch "github.com/Yoak3n/aimin/hand/internet/search"
+	"github.com/tidwall/gjson"
 )
 
 func NewExploreNode(check func(ctx *fsm.Context) bool) *fsm.WorkState {
@@ -47,6 +47,7 @@ func makeExploreAction() fsm.WorkAction {
 				question, chosenType, chosenName, chosenDegree = createExploreQuestionFromGraph(ctx, 10, chosenStrategy)
 				progress++
 			case 2:
+				progress++
 				answer = askForAnswer(question, chosenStrategy)
 				if chosenStrategy == ExploreStrategyAskUser && isAskUserNoClientAnswer(answer) {
 					chosenStrategy = ExploreStrategyWebSearch
@@ -59,11 +60,15 @@ func makeExploreAction() fsm.WorkAction {
 						question = fmt.Sprintf("%s %s", chosenName, chosenType)
 					}
 					logger.Logger.Infof("[Explore] Strategy=%s Question: %s", chosenStrategy, question)
+				} else if chosenStrategy == ExploreStrategyAskUser && isAskUserTimeoutAnswer(answer) {
+					chosenStrategy = ExploreStrategyWebSearch
+					question = fmt.Sprintf("%s %s", chosenName, chosenType)
+					logger.Logger.Infof("[Explore] AskUser timeout -> Strategy=%s Question: %s", chosenStrategy, question)
+					answer = askForAnswer(question, chosenStrategy)
 					answer = askForAnswer(question, chosenStrategy)
 				}
-				progress++
 			case 3:
-				handleExploreAnswer(question, answer, chosenType, chosenName)
+				handleExploreAnswer(chosenStrategy, question, answer, chosenType, chosenName)
 				if ctx != nil && ctx.Persist != nil {
 					ctx.Persist.Append("explore", map[string]any{
 						"node_type": chosenType,
@@ -92,16 +97,15 @@ const (
 func chooseExploreStrategy() ExploreStrategy {
 	choice := rand.IntN(3)
 	if choice >= 2 {
-		return ExploreStrategyAskUser
+		return ExploreStrategyWebSearch
 	}
-	return ExploreStrategyWebSearch
+	return ExploreStrategyAskUser
 }
 
 func createExploreQuestionFromGraph(ctx *fsm.Context, candidateLimit int, strategy ExploreStrategy) (string, string, string, int64) {
 	if candidateLimit <= 0 {
 		candidateLimit = 10
 	}
-	logger.Logger.Println("Explore:", strategy, candidateLimit)
 	n4 := helper.UseDB().GetNeuroDB()
 	if n4 == nil {
 		return "请探索：从图数据库中选取一个连接边最少的节点（当前数据库不可用）", "", "", 0
@@ -112,17 +116,74 @@ func createExploreQuestionFromGraph(ctx *fsm.Context, candidateLimit int, strate
 		return "请探索：从图数据库中选取一个连接边最少的节点（未获取到候选节点）", "", "", 0
 	}
 
-	chosen := candidates[rand.IntN(len(candidates))]
 	noise := ""
 	if ctx != nil && ctx.Persist != nil {
 		noise = exploreNoise(ctx.Persist, 1200, 18)
 	}
-	question := generateExploreQuestionByLLM(chosen.Type, chosen.Name, chosen.Degree, noise, strategy)
+	chosenType, chosenName, chosenDegree, question := chooseExploreNodeAndQuestionByLLM(candidates, noise, strategy)
+	if chosenType == "" || chosenName == "" {
+		fallback := candidates[rand.IntN(len(candidates))]
+		chosenType, chosenName, chosenDegree = fallback.Type, fallback.Name, fallback.Degree
+		question = ""
+	}
+
 	if strings.TrimSpace(question) == "" {
-		question = fmt.Sprintf("请探索图谱节点：%s:%s（连接度=%d）", chosen.Type, chosen.Name, chosen.Degree)
+		if strategy == ExploreStrategyWebSearch {
+			question = fmt.Sprintf("%s %s", chosenName, chosenType)
+		} else {
+			question = fmt.Sprintf("请探索图谱节点：%s:%s（连接度=%d）", chosenType, chosenName, chosenDegree)
+		}
 	}
 	logger.Logger.Infof("[Explore] Strategy=%s Question: %s", strategy, question)
-	return question, chosen.Type, chosen.Name, chosen.Degree
+	return question, chosenType, chosenName, chosenDegree
+}
+
+func chooseExploreNodeAndQuestionByLLM(candidates []neo4j.NodeDegree, noise string, strategy ExploreStrategy) (string, string, int64, string) {
+	if len(candidates) == 0 {
+		return "", "", 0, ""
+	}
+	lines := make([]string, 0, len(candidates))
+	for _, c := range candidates {
+		t := strings.TrimSpace(c.Type)
+		n := strings.TrimSpace(c.Name)
+		if t == "" || n == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("- %s:%s degree=%d", t, n, c.Degree))
+	}
+	if len(lines) == 0 {
+		return "", "", 0, ""
+	}
+	user := "候选节点列表（一般来说连接度越低越需要探索，但同时要注意问题的可回答性及问题与自身的相关性，且提问的难度不能过高超出普通人的知识水平，否则用户会选择不回答NO REPLY）：\n" + strings.Join(lines, "\n") +
+		"\n\n噪声上下文（最近探索记录压缩）：\n" + strings.TrimSpace(noise)
+	systemPrompt := ""
+	switch strategy {
+	case ExploreStrategyWebSearch:
+		systemPrompt = "你是一个图谱探索的“候选节点选择器 + 搜索查询生成器”。请从候选列表中选择一个最值得探索的节点，并为该节点生成一个适合在搜索引擎直接搜索的中文查询串。\n选择考虑：1) 连接度较低优先；2) 与最近噪声上下文重复度低优先；3) 更可能产出明确事实的主题优先（避免过于抽象）。\n输出要求：只输出一行合法 JSON（不要任何解释），字段固定为 {\"type\":\"...\",\"name\":\"...\",\"question\":\"...\"}。\n其中 question 要求：1) 只输出一行，不要换行；2) 不要写成问句，不要带任何解释；3) 尽量用关键词短语，必要时用空格分隔；4) 必须包含节点名，尽量包含节点类型或等价领域词；5) 可参考噪声上下文挑选更有信息量的限定词，但不要复述上下文；6) 难度不能太高。"
+	default:
+		systemPrompt = "你是一个图谱探索的“候选节点选择器 + 提问生成器”。请从候选列表中选择一个最值得探索的节点，并为该节点生成一句自然得体的中文提问/任务指令，用于向用户请教或请用户补充信息。\n选择考虑：1) 连接度较低优先；2) 与最近噪声上下文重复度低优先；3) 更可能产出明确事实的主题优先（避免过于抽象）。\n输出要求：只输出一行合法 JSON（不要任何解释），字段固定为 {\"type\":\"...\",\"name\":\"...\",\"question\":\"...\"}。\n其中 question 要求：1) 只输出一句话，不要换行；2) 语气礼貌、明确且易回答；3) 风格有随机性；4) 可参考噪声上下文调整角度，但不要复述上下文；5) 难度不能太高。"
+	}
+	out, err := llm.Chat([]schema.OpenAIMessage{{Role: schema.OpenAIMessageRoleUser, Content: user}}, systemPrompt)
+	if err != nil {
+		return "", "", 0, ""
+	}
+	out = strings.TrimSpace(out)
+	out = strings.Trim(out, "\"'“”")
+	j := gjson.Parse(out)
+	t := strings.TrimSpace(j.Get("type").String())
+	n := strings.TrimSpace(j.Get("name").String())
+	q := strings.TrimSpace(j.Get("question").String())
+	q = strings.ReplaceAll(q, "\n", " ")
+	q = strings.Join(strings.Fields(q), " ")
+	if t == "" || n == "" {
+		return "", "", 0, ""
+	}
+	for _, c := range candidates {
+		if strings.TrimSpace(c.Type) == t && strings.TrimSpace(c.Name) == n {
+			return c.Type, c.Name, c.Degree, q
+		}
+	}
+	return "", "", 0, ""
 }
 
 func generateExploreQuestionByLLM(nodeType string, nodeName string, degree int64, noise string, strategy ExploreStrategy) string {
@@ -130,9 +191,9 @@ func generateExploreQuestionByLLM(nodeType string, nodeName string, degree int64
 	systemPrompt := ""
 	switch strategy {
 	case ExploreStrategyWebSearch:
-		systemPrompt = "你是搜索查询生成器。请基于给定目标节点生成一个适合在搜索引擎直接搜索的中文查询串，要求：1) 只输出一行，不要换行；2) 不要写成问句，不要带任何解释；3) 尽量用关键词短语，必要时用空格分隔；4) 必须包含节点名，尽量包含节点类型或等价领域词；5) 可参考噪声上下文挑选更有信息量的限定词，但不要复述上下文。"
+		systemPrompt = "你是搜索查询生成器。请基于给定目标节点生成一个适合在搜索引擎直接搜索的中文查询串，要求：1) 只输出一行，不要换行；2) 不要写成问句，不要带任何解释；3) 尽量用关键词短语，必要时用空格分隔；4) 必须包含节点名，尽量包含节点类型或等价领域词；5) 可参考噪声上下文挑选更有信息量的限定词，但不要复述上下文；6) 提问的难度不能太高，要与普通人的知识水平相近，否则用户会选择不回答"
 	default:
-		systemPrompt = "你是一个智能体的探索提问生成器。请基于给定目标节点生成一句自然得体的中文提问/任务指令，用于向用户请教或请用户补充信息，要求：1) 只输出一句话，不要换行；2) 语气礼貌、明确且易回答，一定要注意提问的边界，如果频繁提到个人隐私问题用户会反感；3) 风格有随机性（可在提问角度/任务形式上变化）；4) 可参考噪声上下文调整角度，但不要复述上下文；5) 不要输出任何额外解释。"
+		systemPrompt = "你是一个智能体的探索提问生成器。请基于给定目标节点生成一句自然得体的中文提问/任务指令，用于向用户请教或请用户补充信息，要求：1) 只输出一句话，不要换行；2) 语气礼貌、明确且易回答，一定要注意提问的边界，如果频繁提到个人隐私问题用户会反感；3) 风格有随机性（可在提问角度/任务形式上变化）；4) 可参考噪声上下文调整角度，但不要复述上下文；5) 提问的难度不能太高，要与普通人的知识水平相近，否则用户会选择不回答"
 	}
 	out, err := llm.Chat([]schema.OpenAIMessage{{Role: schema.OpenAIMessageRoleUser, Content: user}}, systemPrompt)
 	if err != nil {
@@ -223,176 +284,35 @@ func askForAnswer(question string, strategy ExploreStrategy) []string {
 		return action.ProactiveAsk(question)
 	}
 	logger.Logger.Println("Ask for answer:", question)
-	// 网络搜索
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 
-	res, err := duckduckgo.Search(ctx, question, &duckduckgo.Options{
-		Timeout: 20 * time.Second,
+	cookie := config.GlobalConfiguration().Internet.BilibiliCookie
+	results, err := handsearch.Search(ctx, question, &handsearch.Options{
+		Limit:          10,
+		Timeout:        20 * time.Second,
+		PreferBrowser:  true,
+		BilibiliCookie: cookie,
 	})
-	if err != nil {
-		logger.Logger.Errorf("DuckDuckGo Search error: %v\n", err)
-		fb := fallbackSearchByBing(ctx, question)
-		if len(fb) > 0 {
-			logger.Logger.Println("Bing fallback result:", fb)
-			return fb
-		}
-		logger.Logger.Println("No fallback result")
-		return []string{fmt.Sprintf("[DuckDuckGo][错误] %v", err)}
-	}
-	logger.Logger.Println("DuckDuckGo Search result:", res)
-	out := make([]string, 0, 16)
-	if s := strings.TrimSpace(res.Heading); s != "" {
-		out = append(out, "[主题] "+s)
-	}
-	if s := strings.TrimSpace(res.AbstractText); s != "" {
-		out = append(out, "[摘要] "+s)
-	}
-	if s := strings.TrimSpace(res.Answer); s != "" {
-		t := strings.TrimSpace(res.AnswerType)
-		if t != "" {
-			out = append(out, "[答案/"+t+"] "+s)
-		} else {
-			out = append(out, "[答案] "+s)
-		}
-	}
-	if s := strings.TrimSpace(res.Definition); s != "" {
-		out = append(out, "[定义] "+s)
+	if err != nil || len(results) == 0 {
+		logger.Logger.Errorf("Search error: %v\n", err)
+		return []string{fmt.Sprintf("[Search][错误] %v", err)}
 	}
 
-	if len(res.Results) > 0 {
-		out = append(out, "[结果]")
-		n := 5
-		if len(res.Results) < n {
-			n = len(res.Results)
-		}
-		for i := 0; i < n; i++ {
-			it := res.Results[i]
-			line := strings.TrimSpace(it.Text)
-			if line != "" {
-				out = append(out, fmt.Sprintf("- %s", line))
-			}
-		}
-	}
-
-	if len(res.RelatedTopics) > 0 {
-		out = append(out, "[相关]")
-		n := 5
-		if len(res.RelatedTopics) < n {
-			n = len(res.RelatedTopics)
-		}
-		for i := 0; i < n; i++ {
-			it := res.RelatedTopics[i]
-			line := strings.TrimSpace(it.Text)
-			if line != "" {
-				out = append(out, fmt.Sprintf("- %s", line))
-			}
-		}
-	}
-
-	if len(out) == 0 {
-		fb := fallbackSearchByBing(ctx, question)
-		if len(fb) > 0 {
-			return fb
-		}
-		return nil
-	}
-	return out
-}
-
-func fallbackSearchByBing(ctx context.Context, q string) []string {
-	base := "https://www.bing.com/search?q="
-
-	link := base + url.QueryEscape(strings.TrimSpace(q))
-	html, _, err := fetch.FetchHTML(ctx, link, &fetch.FetchOptions{Timeout: 18 * time.Second})
-	if err != nil || strings.TrimSpace(html) == "" {
-		logger.Logger.Errorf("Bing fallback fetch error: %v", err)
-		return nil
-	}
-	results := extractBingResults(html, 10)
-	if len(results) == 0 {
-		// 退化到提取纯文本前几行
-		text, err2 := fetch.ExtractText(html)
-		if err2 != nil {
-			return nil
-		}
-		lines := strings.Split(text, "\n")
-		out := make([]string, 0, 48)
-		out = append(out, "[搜索引擎] Bing (fallback)")
-		out = append(out, "[结果]")
-		n := 0
-		for _, ln := range lines {
-			s := strings.TrimSpace(ln)
-			if s == "" || len([]rune(s)) < 8 {
-				continue
-			}
-			out = append(out, "- "+s)
-			n++
-			if n >= 40 {
-				break
-			}
-		}
-		if n == 0 {
-			return nil
-		}
-		return out
-	}
-	out := make([]string, 0, len(results)*4+4)
-	out = append(out, "[搜索引擎] Bing (fallback)")
+	out := make([]string, 0, len(results)*3+4)
+	out = append(out, "[搜索引擎] "+string(results[0].Provider))
 	out = append(out, "[结果]")
 	for i, r := range results {
-		out = append(out, fmt.Sprintf("%d) %s", i+1, r.Title))
-		if strings.TrimSpace(r.Snippet) != "" {
-			out = append(out, "   "+r.Snippet)
+		title := compactOneLine(r.Title, 200)
+		out = append(out, fmt.Sprintf("%d) %s", i+1, title))
+		if u := strings.TrimSpace(r.URL); u != "" {
+			out = append(out, "   "+u)
+		}
+		if s := compactOneLine(r.Snippet, 400); s != "" {
+			out = append(out, "   "+s)
 		}
 	}
 	return out
-}
-
-type bingResult struct {
-	Title   string
-	URL     string
-	Snippet string
-}
-
-func extractBingResults(htmlText string, max int) []bingResult {
-	blockRe := regexp.MustCompile(`(?is)<li[^>]*class="b_algo"[^>]*>.*?</li>`)
-	blocks := blockRe.FindAllString(htmlText, max)
-	out := make([]bingResult, 0, len(blocks))
-
-	linkRe := regexp.MustCompile(`(?is)<h2[^>]*>.*?<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>.*?</h2>`)
-	snippetRe := regexp.MustCompile(`(?is)<div[^>]*class="b_caption"[^>]*>.*?<p[^>]*>(.*?)</p>`)
-	fallbackSnippetRe := regexp.MustCompile(`(?is)<p[^>]*>(.*?)</p>`)
-
-	for _, blk := range blocks {
-		m := linkRe.FindStringSubmatch(blk)
-		if len(m) < 3 {
-			continue
-		}
-		rawURL := strings.TrimSpace(html.UnescapeString(m[1]))
-		title := cleanBingText(m[2])
-		if title == "" {
-			continue
-		}
-
-		snippet := ""
-		if sm := snippetRe.FindStringSubmatch(blk); len(sm) >= 2 {
-			snippet = cleanBingText(sm[1])
-		} else if sm := fallbackSnippetRe.FindStringSubmatch(blk); len(sm) >= 2 {
-			snippet = cleanBingText(sm[1])
-		}
-		out = append(out, bingResult{Title: title, URL: rawURL, Snippet: snippet})
-	}
-	return out
-}
-
-func cleanBingText(s string) string {
-	re := regexp.MustCompile(`(?s)<[^>]+>`)
-	s = re.ReplaceAllString(s, " ")
-	s = html.UnescapeString(s)
-	s = strings.ReplaceAll(s, "\u00a0", " ")
-	s = strings.Join(strings.Fields(s), " ")
-	return strings.TrimSpace(s)
 }
 
 func isAskUserNoClientAnswer(answer []string) bool {
@@ -400,6 +320,13 @@ func isAskUserNoClientAnswer(answer []string) bool {
 		return false
 	}
 	return strings.HasPrefix(strings.TrimSpace(answer[0]), "[AskUser][无客户端]")
+}
+
+func isAskUserTimeoutAnswer(answer []string) bool {
+	if len(answer) == 0 {
+		return false
+	}
+	return strings.HasPrefix(strings.TrimSpace(answer[0]), "[AskUser][超时]")
 }
 
 type extractedTriple struct {
@@ -414,8 +341,11 @@ type tripleExtractionResponse struct {
 	Triples []extractedTriple `json:"triples"`
 }
 
-func handleExploreAnswer(question string, answer []string, nodeType string, nodeName string) bool {
-	if answer == nil || strings.HasPrefix(answer[0], "[DuckDuckGo][错误]") {
+func handleExploreAnswer(strategy ExploreStrategy, question string, answer []string, nodeType string, nodeName string) bool {
+	if answer == nil || len(answer) == 0 {
+		return false
+	}
+	if strings.HasPrefix(answer[0], "[DuckDuckGo][错误]") || strings.HasPrefix(answer[0], "[Search][错误]") {
 		return false
 	}
 
@@ -430,9 +360,9 @@ func handleExploreAnswer(question string, answer []string, nodeType string, node
 	if n4 == nil {
 		return false
 	}
-
+	inter, err, _ := interactive.ExploreRun(q, a, string(strategy))
 	link := util.RandomIdWithPrefix("exp")
-	chains, err := extractTriplesByLLM(q, a, nodeType, nodeName, link)
+	chains, err := extractTriplesByLLM(q, inter, nodeType, nodeName, link)
 	if err != nil {
 		logger.Logger.Errorf("[Explore] extract triples failed: %v", err)
 		return false
@@ -514,10 +444,12 @@ func extractTriplesByLLM(question string, answer string, nodeType string, nodeNa
 
 func normalizeEntityName(s string) string {
 	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, " ", "")
+
 	if s == "" {
 		return ""
 	}
-	return strings.Join(strings.Fields(s), " ")
+	return strings.Join(strings.Fields(s), "")
 }
 
 func normalizeGraphIdent(s string, fallback string) string {
