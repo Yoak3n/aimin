@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/Yoak3n/aimin/blood/config"
@@ -155,12 +156,7 @@ func isBrandNewWorkspace(workspacePath string) bool {
 		filepath.Join(workspacePath, "memory"),
 		filepath.Join(workspacePath, ".git"),
 	}
-	for _, p := range requiredPaths {
-		if util.FileExists(p) {
-			return false
-		}
-	}
-	return true
+	return !slices.ContainsFunc(requiredPaths, util.FileExists)
 }
 
 func detectLegacySetupCompleted(workspacePath string, templateDir string) bool {

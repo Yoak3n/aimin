@@ -40,12 +40,19 @@ func makeExploreAction() fsm.WorkAction {
 	chosenStrategy := ExploreStrategyWebSearch
 	return func(ctx *fsm.Context) string {
 		ctx.Attr.AddEnergy(-2)
+	outer:
 		for i := progress; i < 4; i++ {
 			switch i {
 			case 1:
 				chosenStrategy = chooseExploreStrategy()
 				question, chosenType, chosenName, chosenDegree = createExploreQuestionFromGraph(ctx, 10, chosenStrategy)
-				progress++
+				if strings.Contains(question, "未获取到候选节点") {
+					progress = 4
+					break outer
+				} else {
+					progress++
+				}
+
 			case 2:
 				progress++
 				answer = askForAnswer(question, chosenStrategy)
@@ -83,6 +90,10 @@ func makeExploreAction() fsm.WorkAction {
 				return fsm.Done
 			}
 		}
+		if progress == 4 {
+			progress = 1
+			return fsm.Done
+		}
 		return fsm.Interrupt
 	}
 }
@@ -96,7 +107,7 @@ const (
 
 func chooseExploreStrategy() ExploreStrategy {
 	choice := rand.IntN(3)
-	if choice >= 2 {
+	if choice >= 1 {
 		return ExploreStrategyWebSearch
 	}
 	return ExploreStrategyAskUser
