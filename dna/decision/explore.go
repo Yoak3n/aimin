@@ -72,7 +72,6 @@ func makeExploreAction() fsm.WorkAction {
 					question = fmt.Sprintf("%s %s", chosenName, chosenType)
 					logger.Logger.Infof("[Explore] AskUser timeout -> Strategy=%s Question: %s", chosenStrategy, question)
 					answer = askForAnswer(question, chosenStrategy)
-					answer = askForAnswer(question, chosenStrategy)
 				}
 			case 3:
 				handleExploreAnswer(chosenStrategy, question, answer, chosenType, chosenName)
@@ -298,12 +297,11 @@ func askForAnswer(question string, strategy ExploreStrategy) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 
-	cookie := config.GlobalConfiguration().Internet.BilibiliCookie
 	results, err := handsearch.Search(ctx, question, &handsearch.Options{
 		Limit:          10,
 		Timeout:        20 * time.Second,
 		PreferBrowser:  true,
-		BilibiliCookie: cookie,
+		BilibiliCookie: config.GlobalConfiguration().Internet.BilibiliCookie,
 	})
 	if err != nil || len(results) == 0 {
 		logger.Logger.Errorf("Search error: %v\n", err)

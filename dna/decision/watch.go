@@ -14,6 +14,7 @@ func NewWatchNode(check func(ctx *fsm.Context) bool) *fsm.WorkState {
 }
 
 func makeWatchAction() fsm.WorkAction {
+	// TODO 集成rsiew项目，获取用户在当前电脑上的状态
 	progress := 1
 	return func(ctx *fsm.Context) string {
 		ticker := time.NewTicker(time.Second)
