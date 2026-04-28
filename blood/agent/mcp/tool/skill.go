@@ -18,6 +18,9 @@ func ComplexTaskForSkill(ctx *Context) string {
 		skill.GlobalSkillHUB().Active = ""
 		return "已清除当前激活技能"
 	} else {
+		if skill.GlobalSkillHUB().Active == p {
+			return fmt.Sprintf("技能【%s】已处于激活状态，无需重复加载；请继续执行任务", p)
+		}
 		skill.GlobalSkillHUB().Active = p
 		return fmt.Sprintf("加载技能【%s】完成，已注入到上下文，请继续执行任务", p)
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/Yoak3n/aimin/blood/schema"
 	"github.com/Yoak3n/aimin/blood/schema/ws"
 	"github.com/Yoak3n/aimin/dna/fsm"
+	"github.com/Yoak3n/aimin/hand/interactive"
 	"github.com/gorilla/websocket"
 )
 
@@ -208,6 +209,17 @@ func (wh *WebSocketHub) listen(id string, conn *websocket.Conn) {
 				Data:   ws.PongMessage,
 			}
 			conn.WriteJSON(pongMessage)
+		case ws.InterruptMessage:
+			ok := interactive.RequestInterrupt(id)
+			if ok {
+				wh.BroadcastLog(fmt.Sprintf("[Interrupt] from=%s 已请求打断当前轮次", id))
+			} else {
+				if interactive.HasInterruptibleRound(id) {
+					wh.BroadcastLog(fmt.Sprintf("[Interrupt] from=%s 已请求打断当前轮次", id))
+				} else {
+					wh.BroadcastLog(fmt.Sprintf("[Interrupt] from=%s 当前没有可打断的任务", id))
+				}
+			}
 		case ws.AddTaskMessage:
 			// 无法直接断言为任务数据
 			buf, _ := json.Marshal(messageData.Data)

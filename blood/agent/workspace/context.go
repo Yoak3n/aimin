@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yoak3n/aimin/blood/agent/mcp"
 	"github.com/Yoak3n/aimin/blood/agent/skill"
 	"github.com/Yoak3n/aimin/blood/config"
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
@@ -56,7 +55,7 @@ func (wc *WorkspaceContext) String(choose ...ContextChoice) string {
 	if len(choose) == 0 {
 		choose = append(choose, Normal)
 	}
-	wc.BuildPreviousTaskResults().BuildEnvInfo().BuildToolInfo().BuildSkillInfo().BuildWorkspaceRoots().BuildWorkspaceContext(choose[0])
+	wc.BuildPreviousTaskResults().BuildEnvInfo().BuildSkillInfo().BuildWorkspaceRoots().BuildWorkspaceContext(choose[0])
 	return wc.prompt
 }
 
@@ -90,24 +89,8 @@ func (wc *WorkspaceContext) BuildEnvInfo() *WorkspaceContext {
 	return wc
 }
 
-func (wc *WorkspaceContext) BuildToolInfo() *WorkspaceContext {
-	tools := mcp.GetMcpTools()
-	if len(tools) == 0 {
-		return wc
-	}
-	var toolsDesc strings.Builder
-	prefix := `## 工具可用性
-你可以使用的工具如下（名称、说明、参数schema）:`
-	for _, tool := range tools {
-		fmt.Fprintf(&toolsDesc, "\n%s", tool.String())
-	}
-	out := strings.Replace(wc.prompt, "{tools_description}", prefix+toolsDesc.String(), 1)
-	wc.prompt = out
-	return wc
-}
-
 func (wc *WorkspaceContext) BuildSkillInfo() *WorkspaceContext {
-	skills := skill.GlobalSkillHUB().Skills
+	skills := skill.GlobalSkillHUB().GetSkills()
 	if len(skills) == 0 {
 		wc.prompt = strings.Replace(wc.prompt, "{skills_description}", "", 1)
 		return wc

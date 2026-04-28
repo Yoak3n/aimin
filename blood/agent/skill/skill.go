@@ -138,6 +138,8 @@ func (h *SkillHUB) RenderSkillsList() string {
 }
 
 func (h *SkillHUB) GetSkills() []*Skill {
+	path := fmt.Sprintf("%s/skills", config.GlobalConfiguration().Workspace.Path)
+	h.ScanSkills(path)
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	var skills []*Skill

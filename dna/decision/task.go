@@ -1,7 +1,9 @@
 package decision
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -67,9 +69,19 @@ func makeTaskAction() func(ctx *fsm.Context) string {
 					}
 
 					atomic.StoreInt32(&busy, 1)
+					roundID, _ := interactive.BeginInterruptibleRound(td.From)
 					_, err := conv.Ask(q)
+					interactive.EndInterruptibleRound(td.From, roundID)
 					atomic.StoreInt32(&busy, 0)
 					if err != nil {
+						if errors.Is(err, context.Canceled) {
+							msg := schemaws.NewReplyMessage(schemaws.ReplyStatusFinish, td.ID, "[已打断]")
+							b, _ := json.Marshal(msg)
+							if interactive.WSReplyBroadcast != nil {
+								interactive.WSReplyBroadcast(td.From, b)
+							}
+							continue
+						}
 						msg := schemaws.NewReplyMessage(schemaws.ReplyStatusFinish, td.ID, fmt.Sprintf("[错误] %v", err))
 						b, _ := json.Marshal(msg)
 						if interactive.WSReplyBroadcast != nil {
@@ -110,6 +122,21 @@ func makeTaskAction() func(ctx *fsm.Context) string {
 			if v, ok := ctx.Data[TaskQueueKey]; ok {
 				if qq, ok := v.([]fsm.TaskData); ok {
 					q = qq
+				}
+			}
+		}
+
+		if len(q) > 0 && interactive.ConsumeInterruptQueueClear(q[0].From) {
+			q = nil
+			if ctx != nil {
+				delete(ctx.Data, TaskQueueKey)
+			}
+		drainQuestionCh:
+			for {
+				select {
+				case <-questionCh:
+				default:
+					break drainQuestionCh
 				}
 			}
 		}

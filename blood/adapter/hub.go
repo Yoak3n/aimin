@@ -23,6 +23,26 @@ type LLMAdapterHub struct {
 	mutex    sync.RWMutex
 }
 
+func (h *LLMAdapterHub) PinAdapter(llmType config.LLMType) (LLMAdapter, string, error) {
+	active := h.chatModelByType(llmType)
+	return h.getAdapterByTypeWithKey(llmType, active)
+}
+
+func (h *LLMAdapterHub) chatModelByType(llmType config.LLMType) string {
+	cfg := config.GlobalConfiguration()
+	if cfg == nil {
+		return ""
+	}
+	switch llmType {
+	case config.LLMTypeChat:
+		return cfg.ActiveLLM.ChatModel
+	case config.LLMTypeEmbedding:
+		return cfg.ActiveLLM.EmbeddingModel
+	default:
+		return cfg.ActiveLLM.ChatModel
+	}
+}
+
 func NewLLMAdapterHub() *LLMAdapterHub {
 	h := &LLMAdapterHub{
 		Adapters: make(map[string]LLMAdapter),
@@ -155,9 +175,16 @@ func (h *LLMAdapterHub) getAdapterByTypeWithKey(llmType config.LLMType, activeMo
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 
+	matchType := func(actual config.LLMType) bool {
+		if llmType == config.LLMTypeChat {
+			return actual == config.LLMTypeChat || actual == config.LLMTypeThink
+		}
+		return actual == llmType
+	}
+
 	if strings.TrimSpace(activeModel) != "" {
 		for key, adapter := range h.Adapters {
-			if config.LLMType(adapter.GetConfig().Type) != llmType {
+			if !matchType(config.LLMType(adapter.GetConfig().Type)) {
 				continue
 			}
 			if adapter.GetConfig().Model != activeModel {
@@ -172,7 +199,7 @@ func (h *LLMAdapterHub) getAdapterByTypeWithKey(llmType config.LLMType, activeMo
 
 	candidates := make([]string, 0, len(h.Adapters))
 	for key, adapter := range h.Adapters {
-		if config.LLMType(adapter.GetConfig().Type) != llmType {
+		if !matchType(config.LLMType(adapter.GetConfig().Type)) {
 			continue
 		}
 		if h.isDisabledLocked(key, now) {
@@ -186,6 +213,7 @@ func (h *LLMAdapterHub) getAdapterByTypeWithKey(llmType config.LLMType, activeMo
 	}
 
 	selectedKey := h.selectByLoadBalance(candidates)
+	logger.Logger.Infof("选择的适配器: %s", selectedKey)
 	return h.Adapters[selectedKey], selectedKey, nil
 }
 
@@ -241,6 +269,7 @@ func classifyLLMFailure(err error) (bool, time.Duration) {
 	if err == nil {
 		return false, 0
 	}
+	logger.Logger.Errorf("LLM error: %v", err)
 	msg := strings.ToLower(err.Error())
 	if strings.Contains(msg, "context_length") || strings.Contains(msg, "max tokens") || strings.Contains(msg, "maximum context") {
 		return false, 0
@@ -268,8 +297,8 @@ func classifyLLMFailure(err error) (bool, time.Duration) {
 }
 
 func (h *LLMAdapterHub) Chat(userMessages []schema.OpenAIMessage, systemPrompt string) (string, error) {
-	for attempt := 0; attempt < 2; attempt++ {
-		active := config.GlobalConfiguration().ActiveLLM.ChatModel
+	for range 2 {
+		active := h.chatModelByType(config.LLMTypeChat)
 		adapter, key, err := h.getAdapterByTypeWithKey(config.LLMTypeChat, active)
 		if err != nil {
 			var de disabledAdapterError
@@ -301,7 +330,7 @@ func (h *LLMAdapterHub) ChatStream(userMessages []schema.OpenAIMessage, onDelta 
 		sp = systemPrompt[0]
 	}
 	for attempt := 0; attempt < 2; attempt++ {
-		active := config.GlobalConfiguration().ActiveLLM.ChatModel
+		active := h.chatModelByType(config.LLMTypeChat)
 		adapter, key, err := h.getAdapterByTypeWithKey(config.LLMTypeChat, active)
 		if err != nil {
 			var de disabledAdapterError
@@ -312,7 +341,38 @@ func (h *LLMAdapterHub) ChatStream(userMessages []schema.OpenAIMessage, onDelta 
 			return "", err
 		}
 
-		resp, callErr := adapter.ChatStream(userMessages, onDelta, sp)
+		resp, callErr := adapter.ChatStream(userMessages, nil, onDelta, sp)
+		if disable, d := classifyLLMFailure(callErr); disable {
+			h.disableAdapter(key, d)
+			if adapter != nil {
+				h.clearActiveModel(config.LLMTypeChat, adapter.GetConfig().Model)
+			}
+			logger.Logger.Warnf("LLM adapter disabled: %s", key)
+			continue
+		}
+		return resp.Content, callErr
+	}
+	return "", fmt.Errorf("LLM 调用失败：没有可用的 chat 适配器")
+}
+
+func (h *LLMAdapterHub) ChatStreamWithTools(userMessages []schema.OpenAIMessage, tools []schema.OpenAITool, onDelta func(string) error, systemPrompt ...string) (schema.OpenAIMessage, error) {
+	sp := ""
+	if len(systemPrompt) > 0 {
+		sp = systemPrompt[0]
+	}
+	for range 2 {
+		active := h.chatModelByType(config.LLMTypeChat)
+		adapter, key, err := h.getAdapterByTypeWithKey(config.LLMTypeChat, active)
+		if err != nil {
+			var de disabledAdapterError
+			if errors.As(err, &de) {
+				h.clearActiveModel(config.LLMTypeChat, de.Model)
+				continue
+			}
+			return schema.OpenAIMessage{}, err
+		}
+
+		resp, callErr := adapter.ChatStream(userMessages, tools, onDelta, sp)
 		if disable, d := classifyLLMFailure(callErr); disable {
 			h.disableAdapter(key, d)
 			if adapter != nil {
@@ -323,12 +383,12 @@ func (h *LLMAdapterHub) ChatStream(userMessages []schema.OpenAIMessage, onDelta 
 		}
 		return resp, callErr
 	}
-	return "", fmt.Errorf("LLM 调用失败：没有可用的 chat 适配器")
+	return schema.OpenAIMessage{}, fmt.Errorf("LLM 调用失败：没有可用的 chat 适配器")
 }
 
 func (h *LLMAdapterHub) Embedding(text []string) ([][]float32, error) {
-	for attempt := 0; attempt < 2; attempt++ {
-		active := config.GlobalConfiguration().ActiveLLM.EmbeddingModel
+	for range 2 {
+		active := h.chatModelByType(config.LLMTypeEmbedding)
 		adapter, key, err := h.getAdapterByTypeWithKey(config.LLMTypeEmbedding, active)
 		if err != nil {
 			var de disabledAdapterError

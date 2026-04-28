@@ -135,11 +135,24 @@ func webSearch(ctx *Context, args map[string]string) string {
 	}
 
 	cookie := config.GlobalConfiguration().Internet.BilibiliCookie
+	provider := strings.ToLower(strings.TrimSpace(firstNonEmpty(args["provider"], args["engine"], args["via"])))
+	switch provider {
+	case "", "bing", "bing_serp", "browser":
+		provider = string(handsearch.ProviderBingSERP)
+	case "duckduckgo", "ddg":
+		provider = string(handsearch.ProviderDuckDuckGo)
+	case "bilibili", "bili":
+		provider = string(handsearch.ProviderBilibili)
+	default:
+		return "ERROR: unsupported provider: " + provider
+	}
+
 	items, err := handsearch.Search(cctx, query, &handsearch.Options{
 		Limit:          limit,
 		Timeout:        timeout,
-		PreferBrowser:  true,
+		PreferBrowser:  provider == string(handsearch.ProviderBingSERP),
 		BilibiliCookie: cookie,
+		Provider:       handsearch.Provider(provider),
 	})
 	if err != nil {
 		return "ERROR: " + err.Error()

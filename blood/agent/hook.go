@@ -5,7 +5,7 @@ import "github.com/Yoak3n/aimin/blood/schema"
 type AgentHooks struct {
 	ThoughtHandlers        []func(string)
 	ActionHandlers         []func(string)
-	ToolResultHandlers     []func(action string, result string, err error)
+	ToolResultHandlers     []func(toolCallID string, action string, result string, err error)
 	FinalAnswerHandlers    []func(systemPrompt string, messages []schema.OpenAIMessage, finalAnswer string)
 	AssistantDeltaHandlers []func(string) error
 	LLMResponseHandlers    []func(systemPrompt string, messages []schema.OpenAIMessage, response string)
@@ -38,7 +38,7 @@ func (h *AgentHooks) AddActionHandler(f func(string)) {
 	h.ActionHandlers = append(h.ActionHandlers, f)
 }
 
-func (h *AgentHooks) AddToolResultHandler(f func(action string, result string, err error)) {
+func (h *AgentHooks) AddToolResultHandler(f func(toolCallID string, action string, result string, err error)) {
 	if f == nil {
 		return
 	}
@@ -78,9 +78,9 @@ func (h *AgentHooks) EmitAction(v string) {
 	}
 }
 
-func (h *AgentHooks) EmitToolResult(action string, result string, err error) {
+func (h *AgentHooks) EmitToolResult(toolCallID string, action string, result string, err error) {
 	for _, f := range h.ToolResultHandlers {
-		go f(action, result, err)
+		go f(toolCallID, action, result, err)
 	}
 }
 

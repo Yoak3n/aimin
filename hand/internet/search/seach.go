@@ -38,6 +38,7 @@ type Options struct {
 	BilibiliUA     string
 
 	PreferBrowser bool
+	Provider      Provider
 }
 
 const defaultUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
@@ -64,6 +65,7 @@ func Search(ctx context.Context, query string, opt *Options) ([]Result, error) {
 		cfg.BilibiliCookie = strings.TrimSpace(opt.BilibiliCookie)
 		cfg.BilibiliUA = strings.TrimSpace(opt.BilibiliUA)
 		cfg.PreferBrowser = opt.PreferBrowser
+		cfg.Provider = Provider(strings.ToLower(strings.TrimSpace(string(opt.Provider))))
 	}
 	if cfg.Limit > 20 {
 		cfg.Limit = 20
@@ -80,6 +82,22 @@ func Search(ctx context.Context, query string, opt *Options) ([]Result, error) {
 		var cancel context.CancelFunc
 		cctx, cancel = context.WithTimeout(cctx, cfg.Timeout)
 		defer cancel()
+	}
+
+	if cfg.Provider != "" {
+		switch cfg.Provider {
+		case ProviderDuckDuckGo:
+			return tryDuckDuckGo(cctx, q, cfg.Limit)
+		case ProviderBingSERP:
+			return tryBingSERP(cctx, q, cfg)
+		case ProviderBilibili:
+			if strings.TrimSpace(cfg.BilibiliCookie) == "" {
+				return nil, fmt.Errorf("bilibili cookie is required")
+			}
+			return tryBilibili(cctx, q, cfg)
+		default:
+			return nil, fmt.Errorf("unsupported provider: %s", cfg.Provider)
+		}
 	}
 
 	if out, err := tryDuckDuckGo(cctx, q, cfg.Limit); err == nil && len(out) > 0 {

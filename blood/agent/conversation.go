@@ -31,6 +31,13 @@ func NewConversationAgent(base *ReActAgent) *ConversationAgent {
 	if base == nil {
 		base = NewAgent(workspace.PromptPurposeReAct)
 	}
+	if workspace.IsNewWorkspace() {
+		return &ConversationAgent{
+			Base:     base,
+			Messages: []schema.OpenAIMessage{},
+			MaxTurns: 0,
+		}
+	}
 	recentConversations, err := helper.UseDB().GetRecentConversations(2)
 	if err != nil {
 		logger.Logger.Errorf("get recent conversations failed: %v", err)
@@ -130,7 +137,10 @@ func formatCompactAssistant(_ string, finalAnswer string) string {
 	if finalAnswer == "" {
 		return ""
 	}
-	return fmt.Sprintf("<final_answer>%s</final_answer>", finalAnswer)
+	if extracted := helper.ExtractContentByTag(finalAnswer, "final_answer"); strings.TrimSpace(extracted) != "" {
+		finalAnswer = strings.TrimSpace(extracted)
+	}
+	return finalAnswer
 }
 
 func (c *ConversationAgent) maybeSilentFlushDailyMemory(dropped []schema.OpenAIMessage, keepMessages int) {

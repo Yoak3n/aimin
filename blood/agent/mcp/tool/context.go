@@ -1,16 +1,26 @@
 package tool
 
-import "context"
+import (
+	"context"
+
+	"github.com/Yoak3n/aimin/hand/sandbox"
+)
 
 type Context struct {
-	Ctx     context.Context
-	Payload string
+	Ctx        context.Context
+	Payload    string
+	RunID      string
+	ToolCallID string
+	Action     string
+	OnProgress func(string)
+	Sandbox    *sandbox.Manager
 }
 
 func NewMcpContext() *Context {
 	ctx := context.Background()
 	return &Context{
-		Ctx: ctx,
+		Ctx:     ctx,
+		Sandbox: sandbox.NewManager(),
 	}
 }
 

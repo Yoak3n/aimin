@@ -18,11 +18,15 @@ type WorkspaceState struct {
 	SetupCompletedAt  string `json:"setupCompletedAt,omitempty"`
 }
 
+var flag bool = false
+
+func IsNewWorkspace() bool {
+	return flag
+}
+
 // 确保工作目录存在并初始化
 // 返回值：是否是第一次创建工作目录
 func EnsureWorkspace() bool {
-	// 标记是否是第一次创建工作目录
-	flag := false
 	workspacePath := config.GlobalConfiguration().Workspace.Path
 	if workspacePath == "" {
 		// 默认工作目录

@@ -29,6 +29,11 @@ func extractQuestionAndThoughts(messages []schema.OpenAIMessage) (q string, tsj 
 		t := strings.TrimSpace(helper.ExtractContentByTag(m.Content, "thought"))
 		if t != "" {
 			ts = append(ts, t)
+			continue
+		}
+		c := strings.TrimSpace(m.Content)
+		if c != "" {
+			ts = append(ts, c)
 		}
 	}
 	tsj = strings.Join(ts, "\n")

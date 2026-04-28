@@ -21,15 +21,17 @@ func (f *fakeChatter) Chat(userMessages []schema.OpenAIMessage, systemPrompt str
 
 type fakeStreamChatter struct {
 	gotMessages []schema.OpenAIMessage
+	gotTools    []schema.OpenAITool
 	gotSystem   []string
 	out         string
 	err         error
 }
 
-func (f *fakeStreamChatter) ChatStream(userMessages []schema.OpenAIMessage, _ func(string) error, systemPrompt ...string) (string, error) {
+func (f *fakeStreamChatter) ChatStream(userMessages []schema.OpenAIMessage, tools []schema.OpenAITool, _ func(string) error, systemPrompt ...string) (schema.OpenAIMessage, error) {
 	f.gotMessages = append([]schema.OpenAIMessage(nil), userMessages...)
+	f.gotTools = append([]schema.OpenAITool(nil), tools...)
 	f.gotSystem = append([]string(nil), systemPrompt...)
-	return f.out, f.err
+	return schema.OpenAIMessage{Role: schema.OpenAIMessageRoleAssistant, Content: f.out}, f.err
 }
 
 func TestChatWith_PassesArgs(t *testing.T) {
@@ -50,12 +52,12 @@ func TestChatWith_PassesArgs(t *testing.T) {
 func TestChatStreamWith_PassesArgs(t *testing.T) {
 	c := &fakeStreamChatter{out: "ok"}
 	msgs := []schema.OpenAIMessage{{Role: schema.OpenAIMessageRoleUser, Content: "hi"}}
-	got, err := ChatStreamWith(c, msgs, nil, "sys")
+	got, err := ChatStreamWith(c, msgs, nil, nil, "sys")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if got != "ok" {
-		t.Fatalf("unexpected out: %q", got)
+	if got.Content != "ok" {
+		t.Fatalf("unexpected out: %q", got.Content)
 	}
 	if len(c.gotSystem) != 1 || c.gotSystem[0] != "sys" || len(c.gotMessages) != 1 || c.gotMessages[0].Content != "hi" {
 		t.Fatalf("unexpected args: system=%#v messages=%#v", c.gotSystem, c.gotMessages)

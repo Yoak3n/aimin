@@ -4,10 +4,12 @@ export type WsActionType =
   | "Close"
   | "Ping"
   | "Pong"
+  | "Interrupt"
   | "Ask"
   | "Answer"
   | "Task"
   | "Reply"
+  | "ToolResult"
   | "State";
 
 export interface WsMessage<TAction extends WsActionType = WsActionType, TData = unknown> {
@@ -25,6 +27,7 @@ export type WsLogMessage = WsMessage<"Log", WsLogMessageData>;
 export type WsCloseMessage = WsMessage<"Close", "Close" | string>;
 export type WsPingMessage = WsMessage<"Ping", "Ping" | string>;
 export type WsPongMessage = WsMessage<"Pong", "Pong" | string>;
+export type WsInterruptMessage = WsMessage<"Interrupt", "Interrupt" | string | null>;
 
 export interface WsAskMessageData {
   id: string;
@@ -72,6 +75,17 @@ export interface WsReplyMessageData {
 }
 
 export type WsReplyMessage = WsMessage<"Reply", WsReplyMessageData>;
+
+export interface WsToolResultMessageData {
+  task_id: string;
+  tool_call_id: string;
+  action: string;
+  result: string;
+  error?: string;
+  has_error: boolean;
+}
+
+export type WsToolResultMessage = WsMessage<"ToolResult", WsToolResultMessageData>;
 export type WsStateMessage = WsMessage<"State", string>;
 
 export type WsIncomingMessage =
@@ -80,8 +94,16 @@ export type WsIncomingMessage =
   | WsCloseMessage
   | WsPingMessage
   | WsPongMessage
+  | WsInterruptMessage
   | WsAskMessage
   | WsReplyMessage
+  | WsToolResultMessage
   | WsStateMessage;
 
-export type WsOutgoingMessage = WsCloseMessage | WsPongMessage | WsAnswerMessage | WsAddTaskMessage | WsPingMessage;
+export type WsOutgoingMessage =
+  | WsCloseMessage
+  | WsPongMessage
+  | WsAnswerMessage
+  | WsAddTaskMessage
+  | WsPingMessage
+  | WsInterruptMessage;

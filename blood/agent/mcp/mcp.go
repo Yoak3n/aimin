@@ -9,6 +9,7 @@ import (
 	"github.com/Yoak3n/aimin/blood/agent/mcp/tool"
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
+	"github.com/Yoak3n/aimin/hand/sandbox"
 )
 
 type McpHUB struct {
@@ -56,15 +57,46 @@ func (m *McpHUB) Execute(action string) (string, error) {
 		logger.Logger.Error("解析函数调用失败", err)
 		return "工具调用错误: " + err.Error(), err
 	}
-	tool, ok := m.tools[name]
+	return m.ExecuteTool(name, payload)
+}
+
+func (m *McpHUB) ExecuteTool(name string, payload string) (string, error) {
+	return m.ExecuteToolWithMeta(name, payload, "", "", "", nil)
+}
+
+func (m *McpHUB) ExecuteToolWithMeta(name string, payload string, runID string, toolCallID string, action string, onProgress func(string)) (string, error) {
+	t, ok := m.tools[name]
 	if !ok {
 		return "未找到对应的工具", fmt.Errorf("未找到对应的工具")
 	}
-	m.Ctx.SetPayload(payload)
-	// TODO 是否需要请求权限
-	res := tool.Action(m.Ctx)
-	if after, ok0 :=strings.CutPrefix(res, "ERROR:"); ok0  {
+	baseCtx := m.Ctx
+	if baseCtx == nil {
+		baseCtx = tool.NewMcpContext()
+		m.Ctx = baseCtx
+	}
+	if baseCtx.Sandbox == nil {
+		baseCtx.Sandbox = sandbox.NewManager()
+	}
+	callCtx := &tool.Context{
+		Ctx:        baseCtx.Ctx,
+		Payload:    payload,
+		RunID:      runID,
+		ToolCallID: toolCallID,
+		Action:     action,
+		OnProgress: onProgress,
+		Sandbox:    baseCtx.Sandbox,
+	}
+
+	res := t.Action(callCtx)
+	if after, ok0 := strings.CutPrefix(res, "ERROR:"); ok0 {
 		return res, errors.New(strings.TrimSpace(after))
 	}
 	return res, nil
+}
+
+func (m *McpHUB) CleanupRun(runID string) int {
+	if m == nil || m.Ctx == nil || m.Ctx.Sandbox == nil {
+		return 0
+	}
+	return m.Ctx.Sandbox.KillRun(runID)
 }

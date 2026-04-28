@@ -9,6 +9,7 @@ const (
 	CloseMessage ActionType = "Close"
 	PingMessage  ActionType = "Ping"
 	PongMessage  ActionType = "Pong"
+	InterruptMessage ActionType = "Interrupt"
 	// agent主动提问通道
 	AskMessage ActionType = "Ask"
 	// agent主动提问获得回答通道
@@ -17,6 +18,7 @@ const (
 	AddTaskMessage ActionType = "Task"
 	// 用户添加任务（接收消息）通道
 	ReplyMessage ActionType = "Reply"
+	ToolResultMessage ActionType = "ToolResult"
 	StateMessage ActionType = "State"
 )
 

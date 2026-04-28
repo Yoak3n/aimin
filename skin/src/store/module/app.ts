@@ -68,6 +68,9 @@ export const useAppStore = defineStore("app", {
     sendPing(payload: string = "Ping") {
       this.sendMessage({ action: "Ping", data: payload });
     },
+    sendInterrupt(payload: string = "Interrupt") {
+      this.sendMessage({ action: "Interrupt", data: payload });
+    },
     sendAnswer(payload: WsAnswerMessageData) {
       this.sendMessage({ action: "Answer", data: payload });
     },

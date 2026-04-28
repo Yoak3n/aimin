@@ -24,7 +24,7 @@ func (e *ExecPlanAgent) RegisterActionHandler(h func(string)) {
 	e.ensureHooks().AddActionHandler(h)
 }
 
-func (e *ExecPlanAgent) RegisterToolResultHandler(h func(action string, result string, err error)) {
+func (e *ExecPlanAgent) RegisterToolResultHandler(h func(toolCallID string, action string, result string, err error)) {
 	e.ensureHooks().AddToolResultHandler(h)
 }
 
@@ -66,7 +66,7 @@ func (es *ExecPlanSubAgent) RegisterActionHandler(h func(string)) {
 	es.ensureHooks().AddActionHandler(h)
 }
 
-func (es *ExecPlanSubAgent) RegisterToolResultHandler(h func(action string, result string, err error)) {
+func (es *ExecPlanSubAgent) RegisterToolResultHandler(h func(toolCallID string, action string, result string, err error)) {
 	es.ensureHooks().AddToolResultHandler(h)
 }
 

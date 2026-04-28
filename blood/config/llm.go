@@ -7,6 +7,7 @@ import (
 
 const (
 	LLMTypeChat      LLMType = "chat"
+	LLMTypeThink     LLMType = "think"
 	LLMTypeEmbedding LLMType = "embedding"
 )
 
