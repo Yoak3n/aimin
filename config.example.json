@@ -1,0 +1,57 @@
+{
+  "llms": [
+    {
+      "provider": "siliconflow",
+      "model": "",
+      "api_key": "",
+      "api_url": "https://api.siliconflow.cn/v1/chat/completions",
+      "type": "chat"
+    },{
+      "provider": "ollama",
+      "model": "",
+      "api_key": "ollama",
+      "api_url": "http://localhost:11434/api/embed",
+      "type": "embedding"
+    },
+    {
+      "provider": "deepseek",
+      "model": "",
+      "api_key": "",
+      "api_url": "https://api.deepseek.com/v1/chat/completions",
+      "type": "think"
+    }
+  ],
+  "workspace": {
+    "path": "",
+    "memory_days": 7,
+    "context_size": 8000,
+    "file_content_size": 2000
+  },
+  "database": {
+    "postgres": {
+      "host": "",
+      "port": 0,
+      "user": "",
+      "password": "",
+      "dbname": "",
+      "sslmode": "disable",
+      "timezone": "Asia/Shanghai",
+      "dimension": 2560
+    },
+    "neo4j": {
+      "uri": "",
+      "host": "",
+      "port": 0,
+      "user": "",
+      "password": ""
+    }
+  },
+  "internet": {
+    "bilibili_cookie": ""
+  },
+  "active_llm": {
+    "chat_model": "",
+    "embedding_model": ""
+  },
+  "disabled_llm": {}
+}
