@@ -353,7 +353,7 @@ type tripleExtractionResponse struct {
 }
 
 func handleExploreAnswer(strategy ExploreStrategy, question string, answer []string, nodeType string, nodeName string) bool {
-	if answer == nil || len(answer) == 0 {
+	if len(answer) == 0 {
 		return false
 	}
 	if strings.HasPrefix(answer[0], "[DuckDuckGo][错误]") || strings.HasPrefix(answer[0], "[Search][错误]") {

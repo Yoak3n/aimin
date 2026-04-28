@@ -52,7 +52,7 @@ func NewConversationAgent(base *ReActAgent) *ConversationAgent {
 		}
 		messages = append(messages, schema.OpenAIMessage{
 			Role:    schema.OpenAIMessageRoleUser,
-			Content: fmt.Sprintf("<question>%s</question>", q),
+			Content: q,
 		})
 		if a != "" {
 			messages = append(messages, schema.OpenAIMessage{
@@ -83,7 +83,7 @@ func (c *ConversationAgent) Ask(question string) (ConversationTurn, error) {
 	runMessages = append(runMessages, c.Messages...)
 	runMessages = append(runMessages, schema.OpenAIMessage{
 		Role:    schema.OpenAIMessageRoleUser,
-		Content: fmt.Sprintf("<question>%s</question>", question),
+		Content: question,
 	})
 
 	origHooks := c.Base.Hooks
@@ -186,7 +186,7 @@ func (c *ConversationAgent) maybeSilentFlushDailyMemory(dropped []schema.OpenAIM
 		_, _ = c.Base.RunWithMessages([]schema.OpenAIMessage{
 			{
 				Role:    schema.OpenAIMessageRoleUser,
-				Content: fmt.Sprintf("<question>%s</question>", input),
+				Content: input,
 			},
 		})
 		c.Base.SetHooks(origHooks)

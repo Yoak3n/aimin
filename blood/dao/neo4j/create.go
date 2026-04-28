@@ -2,10 +2,10 @@ package database
 
 import (
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 
+	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/blood/schema"
 	"github.com/neo4j/neo4j-go-driver/v6/neo4j"
 )
@@ -119,10 +119,10 @@ func (n *Neo4jDB) CreateNode(e []schema.EntityTable) error {
 		}
 		res, err := neo4j.ExecuteQuery(n.ctx, n.conn, query, params, neo4j.EagerResultTransformer)
 		if err != nil {
-			log.Println(err)
+			logger.Logger.Error(err)
 			return err
 		}
-		log.Println(res.Summary)
+		logger.Logger.Info(res.Summary)
 	}
 	return nil
 }
