@@ -8,7 +8,14 @@ import (
 var RemoteAsk func(context.Context, string) []string
 
 func ProactiveAsk(question string) []string {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	return ProactiveAskWithContext(context.Background(), question)
+}
+
+func ProactiveAskWithContext(base context.Context, question string) []string {
+	if base == nil {
+		base = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(base, 5*time.Minute)
 	defer cancel()
 	if RemoteAsk != nil {
 		out := RemoteAsk(ctx, question)

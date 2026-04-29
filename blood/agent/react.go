@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/Yoak3n/aimin/blood/agent/mcp"
 	"github.com/Yoak3n/aimin/blood/agent/skill"
 	"github.com/Yoak3n/aimin/blood/agent/workspace"
+	"github.com/Yoak3n/aimin/blood/config"
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/blood/schema"
@@ -151,6 +153,7 @@ func (a *ReActAgent) RunWithMessages(messages []schema.OpenAIMessage) (RunResult
 		}
 		sp := wc.String(a.choice)
 		_ = os.WriteFile("sp.md", []byte(sp), 0644)
+		dumpLLMInput(runID, steps, sp, tools, messages)
 		var onDelta func(string) error
 		if len(hooks.AssistantDeltaHandlers) > 0 {
 			onDelta = hooks.EmitAssistantDelta
@@ -183,12 +186,33 @@ func (a *ReActAgent) RunWithMessages(messages []schema.OpenAIMessage) (RunResult
 
 		if len(msg.ToolCalls) == 0 {
 			consecutiveNoToolCalls++
+			if fallback := extractFallbackFinalAnswer(msg.Content); fallback != "" {
+				if len(extractEmbeddedActions(fallback)) > 0 {
+					return RunResult{}, fmt.Errorf("assistant 未返回 tool_calls，且输出中包含 <action>：%s", strings.TrimSpace(fallback))
+				}
+				fallback = strings.TrimSpace(fallback)
+				if fallback == "" {
+					fallback = "NO_REPLY"
+				}
+				if len(hooks.FinalAnswerHandlers) > 0 {
+					msgSnapshot := append([]schema.OpenAIMessage(nil), messages...)
+					hooks.EmitFinalAnswer(sp, msgSnapshot, fallback)
+				} else if noHooks {
+					fmt.Println("✅Final Answer:", fallback)
+				}
+				a.Mcp.CleanupRun(runID)
+				cleaned = true
+				return RunResult{
+					Thought:     strings.Join(thoughts, "\n"),
+					FinalAnswer: fallback,
+				}, nil
+			}
 			if consecutiveNoToolCalls >= 2 {
 				return RunResult{}, fmt.Errorf("assistant 未返回 tool_calls（需要调用工具或 final_answer）: %s", strings.TrimSpace(msg.Content))
 			}
 			messages = append(messages, schema.OpenAIMessage{
 				Role:    schema.OpenAIMessageRoleUser,
-				Content: "请通过调用工具输出下一步：需要工具就调用对应工具；完成任务就调用 final_answer(final_answer=...)。不要直接输出最终答案文本。",
+				Content: "强制要求：你的下一条 assistant 消息必须包含 tool_calls（至少 1 个）。需要工具就调用对应工具；如果任务已完成或无需继续用工具，也必须调用 final_answer(final_answer=...)；如果真的无话可说，调用 final_answer(final_answer=\"NO_REPLY\")。禁止只输出纯文本；禁止空回复（既没有 tool_calls 也没有 content）。",
 			})
 			continue
 		}
@@ -408,4 +432,70 @@ func extractEmbeddedActions(content string) []string {
 		}
 	}
 	return actions
+}
+
+func extractFallbackFinalAnswer(content string) string {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return ""
+	}
+	if extracted := helper.ExtractContentByTag(content, "final_answer"); strings.TrimSpace(extracted) != "" {
+		return strings.TrimSpace(extracted)
+	}
+	withoutThought := stripXmlTagBlock(content, "thought")
+	withoutThought = stripXmlTagBlock(withoutThought, "final_answer")
+	candidate := strings.TrimSpace(withoutThought)
+	if candidate == "" {
+		return ""
+	}
+	return candidate
+}
+
+func stripXmlTagBlock(raw string, tag string) string {
+	tag = strings.TrimSpace(tag)
+	if tag == "" || strings.TrimSpace(raw) == "" {
+		return raw
+	}
+	re := regexp.MustCompile(`(?s)<` + regexp.QuoteMeta(tag) + `>.*?</` + regexp.QuoteMeta(tag) + `>`)
+	return re.ReplaceAllString(raw, "")
+}
+
+type llmInputDump struct {
+	RunID        string                 `json:"run_id"`
+	Step         int                    `json:"step"`
+	AtUnixMS     int64                  `json:"at_unix_ms"`
+	SystemPrompt string                 `json:"system_prompt"`
+	Tools        []schema.OpenAITool    `json:"tools,omitempty"`
+	Messages     []schema.OpenAIMessage `json:"messages"`
+}
+
+func dumpLLMInput(runID string, step int, systemPrompt string, tools []schema.OpenAITool, messages []schema.OpenAIMessage) {
+	cfg := config.GlobalConfiguration()
+	if cfg == nil || cfg.Workspace == nil {
+		return
+	}
+	base := strings.TrimSpace(cfg.Workspace.Path)
+	if base == "" {
+		return
+	}
+	dir := filepath.Join(base, "debug_llm_inputs")
+	_ = os.MkdirAll(dir, 0755)
+	name := fmt.Sprintf("react_%s_step_%02d.json", runID, step)
+	path := filepath.Join(dir, name)
+
+	msgs := append([]schema.OpenAIMessage(nil), messages...)
+	ts := append([]schema.OpenAITool(nil), tools...)
+	d := llmInputDump{
+		RunID:        runID,
+		Step:         step,
+		AtUnixMS:     time.Now().UnixMilli(),
+		SystemPrompt: systemPrompt,
+		Tools:        ts,
+		Messages:     msgs,
+	}
+	b, err := json.MarshalIndent(d, "", "  ")
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(path, b, 0644)
 }

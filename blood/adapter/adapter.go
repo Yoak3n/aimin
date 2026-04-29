@@ -9,12 +9,15 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Yoak3n/aimin/blood/config"
 	"github.com/Yoak3n/aimin/blood/schema"
 )
 
 const defaultSystemPrompt = "你是一个智能助手，你的回答必须符合中文语法规范。"
+const defaultChatRequestTimeout = 4 * time.Minute
+const defaultEmbeddingRequestTimeout = 30 * time.Second
 
 type LLMAdapter interface {
 	Chat(userMessages []schema.OpenAIMessage, systemPrompt ...string) (string, error)
@@ -506,7 +509,7 @@ func newChatAdapter(c *config.LLMConfig) *BaseAdapter {
 	return &BaseAdapter{
 		config: c,
 		mutex:  sync.RWMutex{},
-		client: &http.Client{},
+		client: &http.Client{Timeout: defaultChatRequestTimeout},
 	}
 }
 
@@ -514,7 +517,7 @@ func newEmbeddingAdapter(c *config.LLMConfig) *BaseAdapter {
 	return &BaseAdapter{
 		config: c,
 		mutex:  sync.RWMutex{},
-		client: &http.Client{},
+		client: &http.Client{Timeout: defaultEmbeddingRequestTimeout},
 	}
 }
 

@@ -90,6 +90,9 @@ func (f *FSM) AddTask(s State) {
 		fmt.Printf("[FSM] Warning: Adding non-task state %s to task queue\n", s.Name())
 	}
 	f.taskQueue = append(f.taskQueue, s)
+	if f.ctx != nil {
+		f.ctx.SetHasPendingTask(true)
+	}
 	fmt.Printf("[FSM] Added Task: %s\n", s.Name())
 }
 
@@ -119,6 +122,9 @@ func (f *FSM) Update() {
 	if !f.isRunning || f.currentState == nil {
 		return
 	}
+	if f.ctx != nil {
+		f.ctx.SetHasPendingTask(len(f.taskQueue) > 0)
+	}
 
 	// 1. 检查是否有高优先级任务需要执行中断
 	if len(f.taskQueue) > 0 {
@@ -129,6 +135,9 @@ func (f *FSM) Update() {
 		if f.currentState.Type() == WorkStateType && f.currentState.IsInterruptible() {
 			// 执行中断逻辑
 			f.taskQueue = f.taskQueue[1:] // 移除任务
+			if f.ctx != nil {
+				f.ctx.SetHasPendingTask(len(f.taskQueue) > 0)
+			}
 			f.interrupt(nextTask)
 			return
 		} else if f.currentState.Type() == VirtualStateType {
@@ -137,6 +146,9 @@ func (f *FSM) Update() {
 			// 这里为了简单，假设虚拟状态如果正在管理一个子节点，应该由子节点的Update逻辑决定。
 			// 但如果虚拟状态本身就是当前State，我们允许打断。
 			f.taskQueue = f.taskQueue[1:]
+			if f.ctx != nil {
+				f.ctx.SetHasPendingTask(len(f.taskQueue) > 0)
+			}
 			f.interrupt(nextTask)
 			return
 		} else if f.currentState.Type() == TaskStateType {
@@ -186,11 +198,17 @@ func (f *FSM) handleStateDone() {
 	if len(f.taskQueue) > 0 {
 		nextTask := f.taskQueue[0]
 		f.taskQueue = f.taskQueue[1:]
+		if f.ctx != nil {
+			f.ctx.SetHasPendingTask(len(f.taskQueue) > 0)
+		}
 		fmt.Printf("[FSM] Starting next task from queue: %s\n", nextTask.Name())
 		f.currentState = nextTask
 		f.broadcastState(f.currentState.Name())
 		f.currentState.OnEnter(f.ctx)
 		return
+	}
+	if f.ctx != nil {
+		f.ctx.SetHasPendingTask(false)
 	}
 
 	// 2. 检查中断栈 (Resume)

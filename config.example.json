@@ -15,7 +15,7 @@
     },
     {
       "provider": "deepseek",
-      "model": "",
+      "model": "deepseek-v4-pro",
       "api_key": "",
       "api_url": "https://api.deepseek.com/v1/chat/completions",
       "type": "think"

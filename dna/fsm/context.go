@@ -17,6 +17,7 @@ type Context struct {
 const (
 	contextBiasKey     = "__fsm_state_bias__"
 	contextLastDoneKey = "__fsm_last_done__"
+	contextHasTaskKey  = "__fsm_has_pending_task__"
 )
 
 func NewContext() *Context {
@@ -118,4 +119,30 @@ func (c *Context) MarkStateDone(stateID string, oppositeStateIDs ...string) {
 		}
 		c.AddStateBias(other, 0.2)
 	}
+}
+
+func (c *Context) SetHasPendingTask(v bool) {
+	if c == nil {
+		return
+	}
+	if c.Data == nil {
+		c.Data = make(map[string]interface{})
+	}
+	if v {
+		c.Data[contextHasTaskKey] = true
+		return
+	}
+	delete(c.Data, contextHasTaskKey)
+}
+
+func (c *Context) HasPendingTask() bool {
+	if c == nil || c.Data == nil {
+		return false
+	}
+	v, ok := c.Data[contextHasTaskKey]
+	if !ok {
+		return false
+	}
+	b, ok := v.(bool)
+	return ok && b
 }

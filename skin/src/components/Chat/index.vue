@@ -481,6 +481,9 @@ async function send() {
 
   isSending.value = true;
   try {
+    if (messages.value.some((m) => m.role === "agent" && m.streaming)) {
+      appStore.sendInterrupt("Interrupt");
+    }
     pushMessage({ role: "user", content: text });
     draft.value = "";
 

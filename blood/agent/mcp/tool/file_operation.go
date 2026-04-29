@@ -3,7 +3,10 @@ package tool
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/Yoak3n/aimin/blood/config"
 )
 
 func FileOperation(ctx *Context) string {
@@ -23,17 +26,29 @@ func FileOperation(ctx *Context) string {
 		if path == "" {
 			return fmt.Sprintf("args %s is invalid", p)
 		}
-		return ReadFile(path)
+		abs, err := resolveFileOpPath(path)
+		if err != nil {
+			return fmt.Sprintf("access denied: %s", err.Error())
+		}
+		return ReadFile(abs)
 	case "write":
 		if path == "" || strings.TrimSpace(content) == "" {
 			return fmt.Sprintf("args %s is invalid", p)
 		}
-		return WriteFile(path, content)
+		abs, err := resolveFileOpPath(path)
+		if err != nil {
+			return fmt.Sprintf("access denied: %s", err.Error())
+		}
+		return WriteFile(abs, content)
 	case "append":
 		if path == "" || strings.TrimSpace(content) == "" {
 			return fmt.Sprintf("args %s is invalid", p)
 		}
-		return AppendFile(path, content)
+		abs, err := resolveFileOpPath(path)
+		if err != nil {
+			return fmt.Sprintf("access denied: %s", err.Error())
+		}
+		return AppendFile(abs, content)
 	default:
 		return fmt.Sprintf("file operation %s not found", op)
 	}
@@ -90,4 +105,92 @@ func WriteFile(path, content string) string {
 		return fmt.Sprintf("write file failed with error: %s", err.Error())
 	}
 	return "write file success"
+}
+
+func resolveFileOpPath(p string) (string, error) {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return "", fmt.Errorf("path is empty")
+	}
+	cfg := config.GlobalConfiguration()
+	ws := ""
+	if cfg != nil && cfg.Workspace != nil {
+		ws = strings.TrimSpace(cfg.Workspace.Path)
+	}
+	mode := ""
+	var deny []string
+	if cfg != nil && cfg.Workspace != nil {
+		mode = strings.ToLower(strings.TrimSpace(cfg.Workspace.AccessMode))
+		deny = append([]string(nil), cfg.Workspace.DenyPaths...)
+	}
+	if mode == "" {
+		mode = strings.ToLower(strings.TrimSpace(config.DefaultWorkspace().AccessMode))
+	}
+
+	p = filepath.FromSlash(p)
+	abs := ""
+	if filepath.IsAbs(p) {
+		abs = filepath.Clean(p)
+	} else if ws != "" {
+		p = strings.TrimLeft(p, `\/`)
+		abs = filepath.Clean(filepath.Join(ws, p))
+	} else {
+		a, err := filepath.Abs(p)
+		if err != nil {
+			return "", err
+		}
+		abs = filepath.Clean(a)
+	}
+
+	if strings.EqualFold(mode, "workspace_only") {
+		if ws == "" {
+			return "", fmt.Errorf("workspace path is empty")
+		}
+		r, err := filepath.Rel(ws, abs)
+		if err != nil {
+			return "", err
+		}
+		r = filepath.Clean(r)
+		if r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
+			return "", fmt.Errorf("path escapes workspace")
+		}
+		return abs, nil
+	}
+
+	if strings.EqualFold(mode, "blacklist") {
+		if len(deny) == 0 {
+			deny = append([]string(nil), config.DefaultWorkspace().DenyPaths...)
+		}
+		if match, rule := isDeniedByGlobList(abs, deny); match {
+			return "", fmt.Errorf("path matches deny rule: %s", rule)
+		}
+		return abs, nil
+	}
+
+	return abs, nil
+}
+
+func isDeniedByGlobList(absPath string, globs []string) (bool, string) {
+	p := strings.ToLower(filepath.ToSlash(filepath.Clean(absPath)))
+	tmp := strings.ToLower(filepath.ToSlash(filepath.Clean(os.TempDir())))
+	if tmp != "" {
+		if p == tmp || strings.HasPrefix(p, tmp+"/") {
+			return false, ""
+		}
+	}
+	for _, raw := range globs {
+		g := strings.TrimSpace(raw)
+		if g == "" {
+			continue
+		}
+		g = strings.ToLower(filepath.ToSlash(strings.TrimSpace(g)))
+		m, err := newGlobMatcher(g)
+		if err != nil {
+			continue
+		}
+		if m.Match(p) {
+			return true, raw
+		}
+	}
+	return false, ""
 }

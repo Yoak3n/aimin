@@ -63,8 +63,8 @@ func (h *LLMAdapterHub) registerAdapter(llmKey string, adapter LLMAdapter) {
 
 func (h *LLMAdapterHub) RegisterAdapter(config *config.LLMConfig) {
 	adapter := NewLLMAdapter(config)
-	h.registerAdapter(config.Provider+"_"+config.Model, adapter)
-	logger.Logger.Infof("注册了适配器: %s", config.Provider+"_"+config.Model)
+	h.registerAdapter(config.Provider+"/"+config.Model, adapter)
+	logger.Logger.Infof("注册了适配器: %s", config.Provider+"/"+config.Model)
 }
 
 // UnregisterAdapter 移除适配器

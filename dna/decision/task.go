@@ -69,7 +69,7 @@ func makeTaskAction() func(ctx *fsm.Context) string {
 					}
 
 					atomic.StoreInt32(&busy, 1)
-					roundID, _ := interactive.BeginInterruptibleRound(td.From)
+					roundID, _, _ := interactive.BeginInterruptibleRound(td.From)
 					_, err := conv.Ask(q)
 					interactive.EndInterruptibleRound(td.From, roundID)
 					atomic.StoreInt32(&busy, 0)

@@ -231,7 +231,7 @@ func (wh *WebSocketHub) listen(id string, conn *websocket.Conn) {
 			if taskData.ID == "" {
 				taskData.ID = util.RandomIdWithPrefix("tsk")
 			}
-			logger.Logger.Infof("AddTaskMessage: %v\n", taskData)
+			logger.Logger.Infof("AddTaskMessage: %v", taskData)
 			wh.Tasks <- taskData
 		case ws.AnswerMessage:
 			payload := AnswerPayload{}

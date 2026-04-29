@@ -40,22 +40,33 @@ func makeExploreAction() fsm.WorkAction {
 	chosenStrategy := ExploreStrategyWebSearch
 	return func(ctx *fsm.Context) string {
 		ctx.Attr.AddEnergy(-2)
-	outer:
-		for i := progress; i < 4; i++ {
-			switch i {
+		shouldInterrupt := func() bool {
+			return ctx != nil && ctx.HasPendingTask()
+		}
+		for {
+			if shouldInterrupt() {
+				return fsm.Interrupt
+			}
+			switch progress {
 			case 1:
 				chosenStrategy = chooseExploreStrategy()
 				question, chosenType, chosenName, chosenDegree = createExploreQuestionFromGraph(ctx, 10, chosenStrategy)
 				if strings.Contains(question, "未获取到候选节点") {
-					progress = 4
-					break outer
-				} else {
-					progress++
+					progress = 1
+					return fsm.Done
 				}
+				progress = 2
+				if shouldInterrupt() {
+					return fsm.Interrupt
+				}
+				continue
 
 			case 2:
-				progress++
-				answer = askForAnswer(question, chosenStrategy)
+				answer = askForAnswer(context.Background(), question, chosenStrategy)
+				if shouldInterrupt() {
+					return fsm.Interrupt
+				}
+
 				if chosenStrategy == ExploreStrategyAskUser && isAskUserNoClientAnswer(answer) {
 					chosenStrategy = ExploreStrategyWebSearch
 					noise := ""
@@ -71,8 +82,18 @@ func makeExploreAction() fsm.WorkAction {
 					chosenStrategy = ExploreStrategyWebSearch
 					question = fmt.Sprintf("%s %s", chosenName, chosenType)
 					logger.Logger.Infof("[Explore] AskUser timeout -> Strategy=%s Question: %s", chosenStrategy, question)
-					answer = askForAnswer(question, chosenStrategy)
+					if shouldInterrupt() {
+						return fsm.Interrupt
+					}
+					answer = askForAnswer(context.Background(), question, chosenStrategy)
+					if shouldInterrupt() {
+						return fsm.Interrupt
+					}
 				}
+
+				progress = 3
+				continue
+
 			case 3:
 				handleExploreAnswer(chosenStrategy, question, answer, chosenType, chosenName)
 				if ctx != nil && ctx.Persist != nil {
@@ -87,13 +108,12 @@ func makeExploreAction() fsm.WorkAction {
 				}
 				progress = 1
 				return fsm.Done
+
+			default:
+				progress = 1
+				return fsm.Done
 			}
 		}
-		if progress == 4 {
-			progress = 1
-			return fsm.Done
-		}
-		return fsm.Interrupt
 	}
 }
 
@@ -289,12 +309,15 @@ func compactOneLine(s string, max int) string {
 	return s
 }
 
-func askForAnswer(question string, strategy ExploreStrategy) []string {
+func askForAnswer(base context.Context, question string, strategy ExploreStrategy) []string {
 	if strategy == ExploreStrategyAskUser {
-		return action.ProactiveAsk(question)
+		return action.ProactiveAskWithContext(base, question)
 	}
 	logger.Logger.Println("Ask for answer:", question)
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	if base == nil {
+		base = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(base, 25*time.Second)
 	defer cancel()
 
 	results, err := handsearch.Search(ctx, question, &handsearch.Options{

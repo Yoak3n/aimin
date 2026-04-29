@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -16,6 +18,7 @@ import (
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 
+	"github.com/Yoak3n/aimin/blood/config"
 	"github.com/Yoak3n/aimin/hand/sandbox"
 )
 
@@ -35,6 +38,9 @@ func ShellCommand(ctx *Context) string {
 	case "windows":
 		commandStr = sanitizeWindowsCommand(commandStr)
 		commandStr = normalizeWindowsCommand(commandStr)
+		if err := enforceCommandPathPolicy(osType, commandStr); err != nil {
+			return "ERROR: access denied: " + err.Error()
+		}
 
 		detachProvided := strings.TrimSpace(firstNonEmpty(args["detach"], args["background"], args["bg"])) != ""
 		detach := false
@@ -85,6 +91,9 @@ func ShellCommand(ctx *Context) string {
 		}
 		return fmt.Sprintf("command execution success\nExit Code: %d\nOutput: %s", exitCode, out)
 	case "linux", "darwin":
+		if err := enforceCommandPathPolicy(osType, commandStr); err != nil {
+			return "ERROR: access denied: " + err.Error()
+		}
 		timeout := parseDurationSeconds(firstNonEmpty(args["timeout_s"], args["timeout"], args["t"]), 0)
 		base := ctx.Ctx
 		if base == nil {
@@ -574,4 +583,112 @@ func shouldAutoDetachWindows(commandStr string) bool {
 func isLikelyAgentBrowserCommand(commandStr string) bool {
 	ls := strings.ToLower(strings.TrimSpace(commandStr))
 	return strings.HasPrefix(ls, "agent-browser ") || ls == "agent-browser"
+}
+
+func enforceCommandPathPolicy(osType string, commandStr string) error {
+	cfg := config.GlobalConfiguration()
+	mode := ""
+	deny := []string(nil)
+	if cfg != nil && cfg.Workspace != nil {
+		mode = strings.ToLower(strings.TrimSpace(cfg.Workspace.AccessMode))
+		deny = append([]string(nil), cfg.Workspace.DenyPaths...)
+	}
+	if mode == "" {
+		mode = strings.ToLower(strings.TrimSpace(config.DefaultWorkspace().AccessMode))
+	}
+	if mode != "blacklist" {
+		return nil
+	}
+	if len(deny) == 0 {
+		deny = append([]string(nil), config.DefaultWorkspace().DenyPaths...)
+	}
+
+	paths := extractPathsFromCommand(osType, commandStr)
+	for _, p := range paths {
+		if p == "" {
+			continue
+		}
+		if match, rule := isDeniedByGlobListForCommand(p, deny); match {
+			return fmt.Errorf("path matches deny rule: %s (%s)", rule, p)
+		}
+	}
+	return nil
+}
+
+func extractPathsFromCommand(osType string, commandStr string) []string {
+	osType = strings.ToLower(strings.TrimSpace(osType))
+	commandStr = strings.TrimSpace(commandStr)
+	if commandStr == "" {
+		return nil
+	}
+	if osType == "windows" {
+		toks := tokenizeWindowsCommand(commandStr)
+		out := make([]string, 0, 8)
+		for _, t := range toks {
+			t = strings.TrimSpace(strings.Trim(t, " \t\r\n,;"))
+			if t == "" {
+				continue
+			}
+			if looksLikeWindowsAbsPath(t) {
+				out = append(out, t)
+				continue
+			}
+		}
+		return out
+	}
+	fields := strings.Fields(commandStr)
+	out := make([]string, 0, 8)
+	for _, f := range fields {
+		f = strings.TrimSpace(strings.Trim(f, " \t\r\n,;"))
+		if f == "" {
+			continue
+		}
+		if strings.HasPrefix(f, "/") || strings.HasPrefix(f, "~/") || strings.HasPrefix(f, "./") || strings.HasPrefix(f, "../") {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+func looksLikeWindowsAbsPath(s string) bool {
+	if len(s) < 3 {
+		return false
+	}
+	if strings.HasPrefix(s, `\\`) || strings.HasPrefix(s, `//`) {
+		return true
+	}
+	b := s[0]
+	if (b < 'A' || b > 'Z') && (b < 'a' || b > 'z') {
+		return false
+	}
+	if s[1] != ':' {
+		return false
+	}
+	return s[2] == '\\' || s[2] == '/'
+}
+
+func isDeniedByGlobListForCommand(p string, globs []string) (bool, string) {
+	abs := strings.TrimSpace(p)
+	abs = filepath.FromSlash(abs)
+	cleaned := filepath.Clean(abs)
+	slash := strings.ToLower(filepath.ToSlash(cleaned))
+	tmp := strings.ToLower(filepath.ToSlash(filepath.Clean(os.TempDir())))
+	if tmp != "" && (slash == tmp || strings.HasPrefix(slash, tmp+"/")) {
+		return false, ""
+	}
+	for _, raw := range globs {
+		g := strings.TrimSpace(raw)
+		if g == "" {
+			continue
+		}
+		g = strings.ToLower(filepath.ToSlash(strings.TrimSpace(g)))
+		m, err := newGlobMatcher(g)
+		if err != nil {
+			continue
+		}
+		if m.Match(slash) {
+			return true, raw
+		}
+	}
+	return false, ""
 }

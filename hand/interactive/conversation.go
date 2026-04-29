@@ -24,9 +24,9 @@ var interruptRoundIDByClient = map[string]string{}
 var interruptCancelByClient = map[string]context.CancelFunc{}
 var interruptClearQueueByClient = map[string]bool{}
 
-func BeginInterruptibleRound(clientID string) (string, context.CancelFunc) {
+func BeginInterruptibleRound(clientID string) (string, context.Context, context.CancelFunc) {
 	if clientID == "" {
-		return "", nil
+		return "", nil, nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	roundID := fmt.Sprintf("ir_%d", time.Now().UnixNano())
@@ -35,7 +35,7 @@ func BeginInterruptibleRound(clientID string) (string, context.CancelFunc) {
 	interruptRoundIDByClient[clientID] = roundID
 	interruptCancelByClient[clientID] = cancel
 	interruptMu.Unlock()
-	return roundID, cancel
+	return roundID, ctx, cancel
 }
 
 func EndInterruptibleRound(clientID string, roundID string) {

@@ -93,6 +93,12 @@ func normalizeConfiguration(cfg *Configuration) {
 		if cfg.Workspace.FileContentSize == 0 {
 			cfg.Workspace.FileContentSize = DefaultWorkspace().FileContentSize
 		}
+		if cfg.Workspace.AccessMode == "" {
+			cfg.Workspace.AccessMode = DefaultWorkspace().AccessMode
+		}
+		if cfg.Workspace.DenyPaths == nil {
+			cfg.Workspace.DenyPaths = append([]string(nil), DefaultWorkspace().DenyPaths...)
+		}
 	}
 	if cfg.Database == nil {
 		cfg.Database = DefaultDatabase()
