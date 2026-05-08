@@ -13,6 +13,7 @@ type Context struct {
 	ToolCallID string
 	Action     string
 	OnProgress func(string)
+	OnAudio    func(format, voice, audioBase64 string, bytes int)
 	Sandbox    *sandbox.Manager
 }
 

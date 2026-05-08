@@ -10,7 +10,8 @@ export type WsActionType =
   | "Task"
   | "Reply"
   | "ToolResult"
-  | "State";
+  | "State"
+  | "Audio";
 
 export interface WsMessage<TAction extends WsActionType = WsActionType, TData = unknown> {
   action: TAction;
@@ -88,6 +89,16 @@ export interface WsToolResultMessageData {
 export type WsToolResultMessage = WsMessage<"ToolResult", WsToolResultMessageData>;
 export type WsStateMessage = WsMessage<"State", string>;
 
+export interface WsAudioMessageData {
+  task_id: string;
+  format: string;
+  voice: string;
+  audio_base64: string;
+  bytes: number;
+}
+
+export type WsAudioMessage = WsMessage<"Audio", WsAudioMessageData>;
+
 export type WsIncomingMessage =
   | WsConnectedMessage
   | WsLogMessage
@@ -98,7 +109,8 @@ export type WsIncomingMessage =
   | WsAskMessage
   | WsReplyMessage
   | WsToolResultMessage
-  | WsStateMessage;
+  | WsStateMessage
+  | WsAudioMessage;
 
 export type WsOutgoingMessage =
   | WsCloseMessage

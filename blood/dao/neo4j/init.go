@@ -68,3 +68,15 @@ func (n *Neo4jDB) EnsureConstraints() error {
 	}
 	return nil
 }
+
+func (n *Neo4jDB) Close() error {
+	if n == nil {
+		return nil
+	}
+	if n.conn == nil {
+		return nil
+	}
+	err := n.conn.Close(n.ctx)
+	n.conn = nil
+	return err
+}

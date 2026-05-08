@@ -20,6 +20,7 @@ const (
 	ReplyMessage ActionType = "Reply"
 	ToolResultMessage ActionType = "ToolResult"
 	StateMessage ActionType = "State"
+	AudioMessage    ActionType = "Audio"
 )
 
 func NewWebsocketMessage(action ActionType, data any) WebsocketMessage {

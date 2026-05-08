@@ -66,3 +66,14 @@ func WebTool() *Tool {
 		Action: tool.Web,
 	}
 }
+
+func TTSTool() *Tool {
+	return &Tool{
+		Name: "TTS",
+		Desc: `Text-to-Speech synthesis. Converts text to audio using MiMo TTS API.
+args: {"text":"要合成的文本","instruction":"风格指令（可选，如'用温柔的语气说'）","voice":"音色名（可选，如冰糖/茉莉/苏打/白桦/Chloe）","model":"模型名（可选，默认mimo-v2.5-tts）","format":"wav或pcm16（可选，默认wav）"}
+返回 JSON 包含 audio_base64 字段（base64 编码的音频数据），客户端解码后可播放。
+推荐在用户要求语音回复、朗读、播报等场景中使用此工具。`,
+		Action: tool.TTS,
+	}
+}

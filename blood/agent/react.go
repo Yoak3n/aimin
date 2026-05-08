@@ -49,6 +49,7 @@ func NewAgent(purpose workspace.PromptPurpose) *ReActAgent {
 	a.RegisterTool(mcp.SkillTool())
 	a.RegisterTool(mcp.ManageMemoryTool())
 	a.RegisterTool(mcp.WebTool())
+	a.RegisterTool(mcp.TTSTool())
 	if workspace.EnsureWorkspace() {
 		logger.Logger.Infof("第一次运行，初始化工作空间")
 	}
@@ -100,6 +101,10 @@ func (a *ReActAgent) RegisterAssistantDeltaHandler(h func(string) error) {
 
 func (a *ReActAgent) RegisterLLMResponseHandler(h func(systemPrompt string, messages []schema.OpenAIMessage, response string)) {
 	a.ensureHooks().AddLLMResponseHandler(h)
+}
+
+func (a *ReActAgent) RegisterAudioHandler(h func(format, voice, audioBase64 string, bytes int)) {
+	a.ensureHooks().AddAudioHandler(h)
 }
 
 func (a *ReActAgent) RunWithMessages(messages []schema.OpenAIMessage) (RunResult, error) {
@@ -297,6 +302,9 @@ func (a *ReActAgent) RunWithMessages(messages []schema.OpenAIMessage) (RunResult
 						if len(hooks.ToolResultHandlers) > 0 {
 							hooks.EmitToolResult(tc.ID, actionBody, p, nil)
 						}
+					},
+					func(format, voice, audioBase64 string, bytes int) {
+						hooks.EmitAudio(format, voice, audioBase64, bytes)
 					},
 				)
 			}

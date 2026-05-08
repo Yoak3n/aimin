@@ -789,7 +789,7 @@ func manageMemorySearchConversationSummaries(query string, limit int) string {
 			sum = strings.TrimSpace(s.Content)
 		}
 		q := compactOneLine(r.Question, 240)
-		fmt.Fprintf(&sb, "<conversation_summary id=%q>\n", r.Id)
+		fmt.Fprintf(&sb, "<conversation_summary id=%q time=%q>\n", r.Id, formatConversationTime(r))
 		if sum != "" {
 			fmt.Fprintf(&sb, "<summary>%s</summary>\n", compactOneLine(sum, 600))
 		} else {
@@ -825,7 +825,7 @@ func manageMemoryVectorSearchConversationSummaries(query string, limit int) stri
 			sum = strings.TrimSpace(s.Content)
 		}
 		q := compactOneLine(r.Question, 240)
-		fmt.Fprintf(&sb, "<conversation_summary id=%q>\n", r.Id)
+		fmt.Fprintf(&sb, "<conversation_summary id=%q time=%q>\n", r.Id, formatConversationTime(r))
 		if sum != "" {
 			fmt.Fprintf(&sb, "<summary>%s</summary>\n", compactOneLine(sum, 600))
 		} else {
@@ -845,7 +845,7 @@ func manageMemoryGetConversationByID(id string) string {
 		return "ERROR: " + err.Error()
 	}
 	sb := strings.Builder{}
-	fmt.Fprintf(&sb, "<conversation id=%q>\n", rec.Id)
+	fmt.Fprintf(&sb, "<conversation id=%q time=%q>\n", rec.Id, formatConversationTime(rec))
 	if strings.TrimSpace(rec.System) != "" {
 		fmt.Fprintf(&sb, "<system>%s</system>\n", strings.TrimSpace(rec.System))
 	}
@@ -878,13 +878,24 @@ func manageMemoryRecentConversations(limit int) string {
 	for _, r := range records {
 		q := compactOneLine(r.Question, 180)
 		a := compactOneLine(r.Answer, 240)
-		fmt.Fprintf(&sb, "<conversation id=%q>\n", r.Id)
+		fmt.Fprintf(&sb, "<conversation id=%q time=%q>\n", r.Id, formatConversationTime(r))
 		fmt.Fprintf(&sb, "<question>%s</question>\n", q)
 		fmt.Fprintf(&sb, "<answer>%s</answer>\n", a)
 		sb.WriteString("</conversation>\n")
 	}
 	sb.WriteString("</recent_conversations>")
 	return sb.String()
+}
+
+func formatConversationTime(r schema.ConversationRecord) string {
+	ts := r.UpdatedAt
+	if ts.IsZero() {
+		ts = r.CreateAt
+	}
+	if ts.IsZero() {
+		return ""
+	}
+	return ts.Format("2006-01-02 15:04:05")
 }
 
 func parseLimit(s string, fallback int) int {

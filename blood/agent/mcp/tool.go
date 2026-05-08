@@ -289,6 +289,43 @@ func toOpenAITool(t *Tool) schema.OpenAITool {
 				},
 			},
 		}
+	case "TTS":
+		return schema.OpenAITool{
+			Type: "function",
+			Function: schema.OpenAIFunctionToolSpec{
+				Name:        t.Name,
+				Description: t.Desc,
+				Parameters: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"text": map[string]any{
+							"type":        "string",
+							"description": "要合成为语音的文本内容。",
+						},
+						"instruction": map[string]any{
+							"type":        "string",
+							"description": "风格指令（可选），用自然语言描述期望的语音风格，如'用温柔的语气说'、'用兴奋的语气播报'等。支持音频标签控制如（温柔）、（开心）等。",
+						},
+						"voice": map[string]any{
+							"type":        "string",
+							"description": "音色名称（可选）。可选值：mimo_default/冰糖/茉莉/苏打/白桦/Mia/Chloe/Milo/Dean。不填则使用配置默认值。",
+							"enum":        []string{"mimo_default", "冰糖", "茉莉", "苏打", "白桦", "Mia", "Chloe", "Milo", "Dean"},
+						},
+						"model": map[string]any{
+							"type":        "string",
+							"description": "模型名称（可选）。可选值：mimo-v2.5-tts（预置音色）/mimo-v2.5-tts-voicedesign（文本设计音色）/mimo-v2.5-tts-voiceclone（音色复刻）。",
+						},
+						"format": map[string]any{
+							"type":        "string",
+							"description": "音频输出格式（可选），默认 wav。",
+							"enum":        []string{"wav", "pcm16"},
+						},
+					},
+					"required":             []string{"text"},
+					"additionalProperties": false,
+				},
+			},
+		}
 	default:
 		return schema.OpenAITool{
 			Type: "function",

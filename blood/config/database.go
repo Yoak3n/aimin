@@ -25,9 +25,16 @@ type Neo4jConfig struct {
 	Password string `json:"password"`
 }
 
+type CayleyConfig struct {
+	Backend string `json:"backend"`
+	Path    string `json:"path"`
+}
+
 type Database struct {
-	Postgres *PostgresConfig `json:"postgres"`
-	Neo4j    *Neo4jConfig    `json:"neo4j"`
+	GraphBackend string          `json:"graph_backend"`
+	Postgres     *PostgresConfig `json:"postgres"`
+	Neo4j        *Neo4jConfig    `json:"neo4j"`
+	Cayley       *CayleyConfig   `json:"cayley"`
 }
 
 func (d *Database) Info() (string, error) {
@@ -35,8 +42,10 @@ func (d *Database) Info() (string, error) {
 		return "null", nil
 	}
 	out := &Database{
-		Postgres: nil,
-		Neo4j:    nil,
+		GraphBackend: d.GraphBackend,
+		Postgres:     nil,
+		Neo4j:        nil,
+		Cayley:       d.Cayley,
 	}
 	if d.Postgres != nil {
 		pg := *d.Postgres
@@ -65,14 +74,18 @@ func (d *Database) Tag() string {
 
 func (d *Database) UnmarshalJSON(data []byte) error {
 	type v2 struct {
-		Postgres *PostgresConfig `json:"postgres"`
-		Neo4j    *Neo4jConfig    `json:"neo4j"`
+		GraphBackend string          `json:"graph_backend"`
+		Postgres     *PostgresConfig `json:"postgres"`
+		Neo4j        *Neo4jConfig    `json:"neo4j"`
+		Cayley       *CayleyConfig   `json:"cayley"`
 	}
 	var candidateV2 v2
 	if err := json.Unmarshal(data, &candidateV2); err == nil {
-		if candidateV2.Postgres != nil || candidateV2.Neo4j != nil {
+		if candidateV2.Postgres != nil || candidateV2.Neo4j != nil || candidateV2.Cayley != nil || candidateV2.GraphBackend != "" {
+			d.GraphBackend = candidateV2.GraphBackend
 			d.Postgres = candidateV2.Postgres
 			d.Neo4j = candidateV2.Neo4j
+			d.Cayley = candidateV2.Cayley
 			return nil
 		}
 	}
@@ -149,9 +162,18 @@ func DefaultNeo4jConfig() *Neo4jConfig {
 	}
 }
 
+func DefaultCayleyConfig() *CayleyConfig {
+	return &CayleyConfig{
+		Backend: "bolt",
+		Path:    "",
+	}
+}
+
 func DefaultDatabase() *Database {
 	return &Database{
-		Postgres: DefaultDatabaseConfig(),
-		Neo4j:    DefaultNeo4jConfig(),
+		GraphBackend: "neo4j",
+		Postgres:     DefaultDatabaseConfig(),
+		Neo4j:        DefaultNeo4jConfig(),
+		Cayley:       DefaultCayleyConfig(),
 	}
 }

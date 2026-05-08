@@ -4,42 +4,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Yoak3n/aimin/blood/dao/graph"
 	"github.com/Yoak3n/aimin/blood/schema"
 	"github.com/neo4j/neo4j-go-driver/v6/neo4j"
 )
-
-type NodeDegree struct {
-	Type   string `json:"type"`
-	Name   string `json:"name"`
-	Degree int64  `json:"degree"`
-}
-
-type LabelCount struct {
-	Label string `json:"label"`
-	Count int64  `json:"count"`
-}
-
-type RelTypeCount struct {
-	Type  string `json:"type"`
-	Count int64  `json:"count"`
-}
-
-type PatternCount struct {
-	From  string `json:"from"`
-	Rel   string `json:"rel"`
-	To    string `json:"to"`
-	Count int64  `json:"count"`
-}
-
-type PropCount struct {
-	Key   string `json:"key"`
-	Count int64  `json:"count"`
-}
-
-type LabelProps struct {
-	Label string      `json:"label"`
-	Props []PropCount `json:"props"`
-}
 
 func (n *Neo4jDB) SampleNodeNamesByLabel(label string, limit int) ([]string, error) {
 	label = strings.TrimSpace(label)
@@ -382,7 +350,7 @@ func (n *Neo4jDB) FindRelationshipsByLink(link string, limit int) ([]schema.Edge
 	return out, nil
 }
 
-func (n *Neo4jDB) FindLeastConnectedNodes(nodeType string, limit int) ([]NodeDegree, error) {
+func (n *Neo4jDB) FindLeastConnectedNodes(nodeType string, limit int) ([]graph.NodeDegree, error) {
 	nodeType = strings.TrimSpace(nodeType)
 	if nodeType != "" && !validIdent(nodeType) {
 		return nil, fmt.Errorf("invalid nodeType=%q", nodeType)
@@ -402,13 +370,13 @@ func (n *Neo4jDB) FindLeastConnectedNodes(nodeType string, limit int) ([]NodeDeg
 		return nil, err
 	}
 
-	out := make([]NodeDegree, 0, len(res.Records))
+	out := make([]graph.NodeDegree, 0, len(res.Records))
 	for _, r := range res.Records {
 		t, _ := r.Get("type")
 		name, _ := r.Get("name")
 		deg, _ := r.Get("degree")
 
-		item := NodeDegree{}
+		item := graph.NodeDegree{}
 		if ts, ok := t.(string); ok {
 			item.Type = ts
 		}
@@ -426,7 +394,7 @@ func (n *Neo4jDB) FindLeastConnectedNodes(nodeType string, limit int) ([]NodeDeg
 	return out, nil
 }
 
-func (n *Neo4jDB) GetTopLabels(limit int) ([]LabelCount, error) {
+func (n *Neo4jDB) GetTopLabels(limit int) ([]graph.LabelCount, error) {
 	if limit <= 0 {
 		limit = 30
 	}
@@ -437,11 +405,11 @@ func (n *Neo4jDB) GetTopLabels(limit int) ([]LabelCount, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]LabelCount, 0, len(res.Records))
+	out := make([]graph.LabelCount, 0, len(res.Records))
 	for _, r := range res.Records {
 		lv, _ := r.Get("label")
 		cv, _ := r.Get("c")
-		item := LabelCount{}
+		item := graph.LabelCount{}
 		if s, ok := lv.(string); ok {
 			item.Label = s
 		}
@@ -458,7 +426,7 @@ func (n *Neo4jDB) GetTopLabels(limit int) ([]LabelCount, error) {
 	return out, nil
 }
 
-func (n *Neo4jDB) GetTopRelationshipTypes(limit int) ([]RelTypeCount, error) {
+func (n *Neo4jDB) GetTopRelationshipTypes(limit int) ([]graph.RelTypeCount, error) {
 	if limit <= 0 {
 		limit = 30
 	}
@@ -469,11 +437,11 @@ func (n *Neo4jDB) GetTopRelationshipTypes(limit int) ([]RelTypeCount, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]RelTypeCount, 0, len(res.Records))
+	out := make([]graph.RelTypeCount, 0, len(res.Records))
 	for _, r := range res.Records {
 		tv, _ := r.Get("t")
 		cv, _ := r.Get("c")
-		item := RelTypeCount{}
+		item := graph.RelTypeCount{}
 		if s, ok := tv.(string); ok {
 			item.Type = s
 		}
@@ -490,7 +458,7 @@ func (n *Neo4jDB) GetTopRelationshipTypes(limit int) ([]RelTypeCount, error) {
 	return out, nil
 }
 
-func (n *Neo4jDB) GetTopPatterns(limit int) ([]PatternCount, error) {
+func (n *Neo4jDB) GetTopPatterns(limit int) ([]graph.PatternCount, error) {
 	if limit <= 0 {
 		limit = 30
 	}
@@ -501,13 +469,13 @@ func (n *Neo4jDB) GetTopPatterns(limit int) ([]PatternCount, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]PatternCount, 0, len(res.Records))
+	out := make([]graph.PatternCount, 0, len(res.Records))
 	for _, r := range res.Records {
 		fv, _ := r.Get("from")
 		rv, _ := r.Get("rel")
 		tv, _ := r.Get("to")
 		cv, _ := r.Get("c")
-		item := PatternCount{}
+		item := graph.PatternCount{}
 		if s, ok := fv.(string); ok {
 			item.From = s
 		}
@@ -530,7 +498,7 @@ func (n *Neo4jDB) GetTopPatterns(limit int) ([]PatternCount, error) {
 	return out, nil
 }
 
-func (n *Neo4jDB) SampleTopPropsByLabel(label string, sample int, propLimit int) ([]PropCount, error) {
+func (n *Neo4jDB) SampleTopPropsByLabel(label string, sample int, propLimit int) ([]graph.PropCount, error) {
 	label = strings.TrimSpace(label)
 	if label == "" {
 		return nil, fmt.Errorf("label is required")
@@ -559,11 +527,11 @@ func (n *Neo4jDB) SampleTopPropsByLabel(label string, sample int, propLimit int)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]PropCount, 0, len(res.Records))
+	out := make([]graph.PropCount, 0, len(res.Records))
 	for _, r := range res.Records {
 		kv, _ := r.Get("k")
 		cv, _ := r.Get("c")
-		item := PropCount{}
+		item := graph.PropCount{}
 		if s, ok := kv.(string); ok {
 			item.Key = s
 		}

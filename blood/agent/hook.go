@@ -9,6 +9,7 @@ type AgentHooks struct {
 	FinalAnswerHandlers    []func(systemPrompt string, messages []schema.OpenAIMessage, finalAnswer string)
 	AssistantDeltaHandlers []func(string) error
 	LLMResponseHandlers    []func(systemPrompt string, messages []schema.OpenAIMessage, response string)
+	AudioHandlers          []func(format, voice, audioBase64 string, bytes int)
 }
 
 func NewAgentHooks() *AgentHooks {
@@ -21,7 +22,8 @@ func (h *AgentHooks) IsEmpty() bool {
 		len(h.ToolResultHandlers) == 0 &&
 		len(h.FinalAnswerHandlers) == 0 &&
 		len(h.AssistantDeltaHandlers) == 0 &&
-		len(h.LLMResponseHandlers) == 0
+		len(h.LLMResponseHandlers) == 0 &&
+		len(h.AudioHandlers) == 0
 }
 
 func (h *AgentHooks) AddThoughtHandler(f func(string)) {
@@ -103,4 +105,17 @@ func (h *AgentHooks) EmitAssistantDelta(v string) error {
 		}
 	}
 	return nil
+}
+
+func (h *AgentHooks) AddAudioHandler(f func(format, voice, audioBase64 string, bytes int)) {
+	if f == nil {
+		return
+	}
+	h.AudioHandlers = append(h.AudioHandlers, f)
+}
+
+func (h *AgentHooks) EmitAudio(format, voice, audioBase64 string, bytes int) {
+	for _, f := range h.AudioHandlers {
+		go f(format, voice, audioBase64, bytes)
+	}
 }

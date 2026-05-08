@@ -178,5 +178,16 @@ func NewConversationTask(id, from string) *agent.ConversationAgent {
 		nerve.ResponseHook(system, finalAnswer, msgs)
 	})
 
+	base.RegisterAudioHandler(func(format, voice, audioBase64 string, bytes int) {
+		if CurrentInterruptErr(from) != nil {
+			return
+		}
+		msg := schemaws.NewAudioMessage(id, format, voice, audioBase64, bytes)
+		buf, _ := json.Marshal(msg)
+		if WSReplyBroadcast != nil {
+			WSReplyBroadcast(from, buf)
+		}
+	})
+
 	return conv
 }

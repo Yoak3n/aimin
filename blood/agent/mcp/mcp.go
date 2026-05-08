@@ -61,10 +61,10 @@ func (m *McpHUB) Execute(action string) (string, error) {
 }
 
 func (m *McpHUB) ExecuteTool(name string, payload string) (string, error) {
-	return m.ExecuteToolWithMeta(name, payload, "", "", "", nil)
+	return m.ExecuteToolWithMeta(name, payload, "", "", "", nil, nil)
 }
 
-func (m *McpHUB) ExecuteToolWithMeta(name string, payload string, runID string, toolCallID string, action string, onProgress func(string)) (string, error) {
+func (m *McpHUB) ExecuteToolWithMeta(name string, payload string, runID string, toolCallID string, action string, onProgress func(string), onAudio func(format, voice, audioBase64 string, bytes int)) (string, error) {
 	t, ok := m.tools[name]
 	if !ok {
 		return "未找到对应的工具", fmt.Errorf("未找到对应的工具")
@@ -84,6 +84,7 @@ func (m *McpHUB) ExecuteToolWithMeta(name string, payload string, runID string, 
 		ToolCallID: toolCallID,
 		Action:     action,
 		OnProgress: onProgress,
+		OnAudio:    onAudio,
 		Sandbox:    baseCtx.Sandbox,
 	}
 

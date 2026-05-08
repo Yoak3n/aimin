@@ -60,7 +60,17 @@
             </div>
           </template>
           <template v-else>
-            {{ m.content }}
+            <span>{{ m.content }}</span>
+            <button
+              v-if="m.audio"
+              class="chat__audio-btn"
+              :class="{ 'chat__audio-btn--playing': playingId === m.id }"
+              type="button"
+              :disabled="playingId === m.id"
+              @click.stop="onPlayAudio(m)"
+            >
+              {{ playingId === m.id ? "播放中..." : "播放语音" }}
+            </button>
           </template>
         </div>
       </div>
@@ -82,7 +92,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useAppStore } from "@/store/module/app";
-import type { WsIncomingMessage, WsReplyMessage, WsReplyMessageData, WsToolResultMessage, WsToolResultMessageData } from "@/types/ws";
+import type { WsIncomingMessage, WsReplyMessage, WsReplyMessageData, WsToolResultMessage, WsToolResultMessageData, WsAudioMessage, WsAudioMessageData } from "@/types/ws";
 
 const props = defineProps<{
   managed?: boolean;
@@ -115,6 +125,7 @@ interface ChatMessage {
   finalAnswer?: string;
   toolCalls?: ToolCallItem[];
   toolResults?: ToolResultItem[];
+  audio?: { base64: string; format: string; voice: string; bytes: number };
 }
 
 const appStore = useAppStore();
@@ -123,6 +134,7 @@ const listEl = ref<HTMLElement | null>(null);
 const draft = ref("");
 const isSending = ref(false);
 const messages = ref<ChatMessage[]>([]);
+const playingId = ref<string | null>(null);
 
 const taskToMessageId = new Map<string, string>();
 const taskToRaw = new Map<string, string>();
@@ -148,6 +160,7 @@ function pushMessage(partial: Omit<ChatMessage, "id" | "time"> & Partial<Pick<Ch
     finalAnswer: partial.finalAnswer,
     toolCalls: partial.toolCalls,
     toolResults: partial.toolResults,
+    audio: partial.audio,
   };
   messages.value.push(message);
   return message;
@@ -419,6 +432,64 @@ function handleToolResultMessage(message: WsIncomingMessage) {
   return true;
 }
 
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+function playAudioBase64(audioBase64: string, format: string, msgId?: string) {
+  try {
+    if (format === "pcm16") {
+      const pcmBuffer = base64ToArrayBuffer(audioBase64);
+      const pcmData = new Int16Array(pcmBuffer);
+      const sampleRate = 24000;
+      const float32 = new Float32Array(pcmData.length);
+      for (let i = 0; i < pcmData.length; i++) {
+        float32[i] = pcmData[i] / 32768.0;
+      }
+      const ctx = new AudioContext({ sampleRate });
+      const audioBuffer = ctx.createBuffer(1, float32.length, sampleRate);
+      audioBuffer.getChannelData(0).set(float32);
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(ctx.destination);
+      if (msgId) playingId.value = msgId;
+      source.start();
+      source.onended = () => {
+        ctx.close();
+        if (playingId.value === msgId) playingId.value = null;
+      };
+    } else {
+      const audioBuffer = base64ToArrayBuffer(audioBase64);
+      const blob = new Blob([audioBuffer], { type: `audio/${format}` });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      if (msgId) playingId.value = msgId;
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        if (playingId.value === msgId) playingId.value = null;
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        if (playingId.value === msgId) playingId.value = null;
+      };
+      audio.play();
+    }
+  } catch (e) {
+    console.error("Audio playback error:", e);
+    playingId.value = null;
+  }
+}
+
+function onPlayAudio(m: ChatMessage) {
+  if (!m.audio) return;
+  playAudioBase64(m.audio.base64, m.audio.format, m.id);
+}
+
 function handleIncoming(message: WsIncomingMessage) {
   if (message.action === "Connected") {
     return;
@@ -442,6 +513,24 @@ function handleIncoming(message: WsIncomingMessage) {
 
   if (message.action === "ToolResult") {
     handleToolResultMessage(message);
+    return;
+  }
+
+  if (message.action === "Audio") {
+    const data = (message as WsAudioMessage).data as WsAudioMessageData | undefined;
+    if (data?.audio_base64) {
+      pushMessage({
+        role: "agent",
+        content: `语音回复 · ${data.voice ?? ""} · ${(data.bytes / 1024).toFixed(1)} KB`,
+        taskId: data.task_id,
+        audio: {
+          base64: data.audio_base64,
+          format: data.format || "wav",
+          voice: data.voice ?? "",
+          bytes: data.bytes ?? 0,
+        },
+      });
+    }
     return;
   }
 
@@ -771,5 +860,33 @@ watch(
   opacity: 0.9;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.chat__audio-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 999px;
+  background: #4f8df5;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.chat__audio-btn:hover:not(:disabled) {
+  background: #3b72d9;
+}
+
+.chat__audio-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.chat__audio-btn--playing {
+  background: #999;
 }
 </style>

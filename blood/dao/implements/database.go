@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/Yoak3n/aimin/blood/config"
+	"github.com/Yoak3n/aimin/blood/dao/cayley"
+	"github.com/Yoak3n/aimin/blood/dao/graph"
 	neo4j "github.com/Yoak3n/aimin/blood/dao/neo4j"
 	pg "github.com/Yoak3n/aimin/blood/dao/pg"
 
@@ -18,14 +21,20 @@ import (
 // Database 数据库连接管理器
 type Database struct {
 	PostgresDB *gorm.DB
-	NeuroDB    *neo4j.Neo4jDB
+	NeuroDB    graph.DB
 	Config     *config.PostgresConfig
 }
 
 // NewDatabase 创建新的数据库连接实例
 func NewDatabase() (*Database, error) {
 	conf := config.GlobalConfiguration()
-	neuroDB := neo4j.NewNeuroDB()
+	var neuroDB graph.DB
+	switch strings.ToLower(strings.TrimSpace(conf.Database.GraphBackend)) {
+	case "cayley":
+		neuroDB = cayleydb.NewNeuroDB()
+	default:
+		neuroDB = neo4j.NewNeuroDB()
+	}
 	db := &Database{
 		Config:  conf.Database.Postgres,
 		NeuroDB: neuroDB,
@@ -108,7 +117,9 @@ func (d *Database) Close() error {
 	if err != nil {
 		return fmt.Errorf("failed to close database connection: %w", err)
 	}
-	//d.NeuroDB.ExecuteQuery()
+	if d.NeuroDB != nil {
+		d.NeuroDB.Close()
+	}
 	log.Println("Database connection closed successfully")
 	return nil
 }
@@ -137,7 +148,7 @@ func (d *Database) GetPostgresSQL() *gorm.DB {
 	return d.PostgresDB
 }
 
-func (d *Database) GetNeuroDB() *neo4j.Neo4jDB {
+func (d *Database) GetNeuroDB() graph.DB {
 	return d.NeuroDB
 }
 

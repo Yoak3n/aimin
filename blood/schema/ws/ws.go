@@ -25,3 +25,24 @@ func NewLogMessageData(content string) LogMessageData {
 		Content: content,
 	}
 }
+
+type AudioMessageData struct {
+	TaskID     string `json:"task_id"`
+	Format     string `json:"format"`
+	Voice      string `json:"voice"`
+	AudioBase64 string `json:"audio_base64"`
+	Bytes      int    `json:"bytes"`
+}
+
+func NewAudioMessage(taskID, format, voice, audioBase64 string, bytes int) WebsocketMessage {
+	return WebsocketMessage{
+		Action: AudioMessage,
+		Data: &AudioMessageData{
+			TaskID:      taskID,
+			Format:      format,
+			Voice:       voice,
+			AudioBase64: audioBase64,
+			Bytes:       bytes,
+		},
+	}
+}

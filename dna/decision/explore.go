@@ -10,7 +10,7 @@ import (
 	"unicode"
 
 	"github.com/Yoak3n/aimin/blood/config"
-	neo4j "github.com/Yoak3n/aimin/blood/dao/neo4j"
+	"github.com/Yoak3n/aimin/blood/dao/graph"
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/blood/pkg/util"
@@ -168,7 +168,7 @@ func createExploreQuestionFromGraph(ctx *fsm.Context, candidateLimit int, strate
 	return question, chosenType, chosenName, chosenDegree
 }
 
-func chooseExploreNodeAndQuestionByLLM(candidates []neo4j.NodeDegree, noise string, strategy ExploreStrategy) (string, string, int64, string) {
+func chooseExploreNodeAndQuestionByLLM(candidates []graph.NodeDegree, noise string, strategy ExploreStrategy) (string, string, int64, string) {
 	if len(candidates) == 0 {
 		return "", "", 0, ""
 	}

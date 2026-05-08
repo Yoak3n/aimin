@@ -28,6 +28,7 @@
     "file_content_size": 2000
   },
   "database": {
+    "graph_backend": "neo4j",
     "postgres": {
       "host": "",
       "port": 0,
@@ -44,6 +45,10 @@
       "port": 0,
       "user": "",
       "password": ""
+    },
+    "cayley": {
+      "backend": "bolt",
+      "path": ""
     }
   },
   "internet": {
