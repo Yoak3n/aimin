@@ -49,6 +49,12 @@
   "internet": {
     "bilibili_cookie": ""
   },
+  "tts": {
+    "api_key": "",
+    "api_url": "https://api.xiaomimimo.com/v1",
+    "model": "mimo-v2.5-tts",
+    "voice": "mimo_default"
+  },
   "active_llm": {
     "chat_model": "",
     "embedding_model": ""

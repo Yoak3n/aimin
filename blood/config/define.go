@@ -15,6 +15,7 @@ type Configuration struct {
 	Workspace   *Workspace       `json:"workspace"`
 	Database    *Database        `json:"database"`
 	Internet    *Internet        `json:"internet"`
+	TTS         *TTSConfig       `json:"tts"`
 	ActiveLLM   ActiveLLMConfig  `json:"active_llm"`
 	DisabledLLM map[string]int64 `json:"disabled_llm"`
 }

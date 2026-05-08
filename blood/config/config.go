@@ -25,6 +25,7 @@ func DefaultConfiguration() *Configuration {
 		Workspace: DefaultWorkspace(),
 		Database:  DefaultDatabase(),
 		Internet:  DefaultInternet(),
+		TTS:       DefaultTTSConfig(),
 	}
 }
 
@@ -154,6 +155,20 @@ func normalizeConfiguration(cfg *Configuration) {
 
 	if cfg.Internet == nil {
 		cfg.Internet = DefaultInternet()
+	}
+
+	if cfg.TTS == nil {
+		cfg.TTS = DefaultTTSConfig()
+	} else {
+		if cfg.TTS.APIUrl == "" {
+			cfg.TTS.APIUrl = DefaultTTSConfig().APIUrl
+		}
+		if cfg.TTS.Model == "" {
+			cfg.TTS.Model = DefaultTTSConfig().Model
+		}
+		if cfg.TTS.Voice == "" {
+			cfg.TTS.Voice = DefaultTTSConfig().Voice
+		}
 	}
 
 }
