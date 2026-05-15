@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/Yoak3n/aimin/blood/config"
-	"github.com/Yoak3n/aimin/blood/dao/cayley"
+	cayleydb "github.com/Yoak3n/aimin/blood/dao/cayley"
 	"github.com/Yoak3n/aimin/blood/dao/graph"
 	neo4j "github.com/Yoak3n/aimin/blood/dao/neo4j"
 	pg "github.com/Yoak3n/aimin/blood/dao/pg"

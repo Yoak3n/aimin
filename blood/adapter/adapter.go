@@ -207,6 +207,7 @@ func (b *BaseAdapter) ChatStream(userMessages []schema.OpenAIMessage, tools []sc
 	var reasoningRaw json.RawMessage
 	toolCallsByIndex := make(map[int]*schema.OpenAIToolCall)
 	toolCallEmitted := make(map[int]bool)
+	finishReason := ""
 
 	for {
 		line, readErr := reader.ReadString('\n')
@@ -243,6 +244,7 @@ func (b *BaseAdapter) ChatStream(userMessages []schema.OpenAIMessage, tools []sc
 						Reasoning json.RawMessage `json:"reasoning_content"`
 						ToolCalls []toolCallDelta `json:"tool_calls"`
 					} `json:"delta"`
+					FinishReason string            `json:"finish_reason"`
 					Message schema.OpenAIMessage `json:"message"`
 					Text    string               `json:"text"`
 				} `json:"choices"`
@@ -250,6 +252,9 @@ func (b *BaseAdapter) ChatStream(userMessages []schema.OpenAIMessage, tools []sc
 			if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
 				raw.WriteString(payload)
 			} else if len(chunk.Choices) > 0 {
+				if finishReason == "" && strings.TrimSpace(chunk.Choices[0].FinishReason) != "" {
+					finishReason = strings.TrimSpace(chunk.Choices[0].FinishReason)
+				}
 				if len(reasoningRaw) == 0 {
 					if text, ok := decodeJSONString(chunk.Choices[0].Delta.Reasoning); ok {
 						reasoning.WriteString(text)
@@ -382,12 +387,14 @@ func (b *BaseAdapter) ChatStream(userMessages []schema.OpenAIMessage, tools []sc
 			Content:   content.String(),
 			Reasoning: outReasoning,
 			ToolCalls: toolCalls,
+			FinishReason: finishReason,
 		}, nil
 	}
 
 	if raw.Len() > 0 {
 		var response struct {
 			Choices []struct {
+				FinishReason string            `json:"finish_reason"`
 				Message schema.OpenAIMessage `json:"message"`
 			} `json:"choices"`
 		}
@@ -396,6 +403,9 @@ func (b *BaseAdapter) ChatStream(userMessages []schema.OpenAIMessage, tools []sc
 				return schema.OpenAIMessage{}, fmt.Errorf("响应中没有选择项")
 			}
 			msg := response.Choices[0].Message
+			if msg.FinishReason == "" {
+				msg.FinishReason = strings.TrimSpace(response.Choices[0].FinishReason)
+			}
 			if onDelta != nil && msg.Content != "" {
 				if err := onDelta(msg.Content); err != nil {
 					return msg, err

@@ -8,14 +8,14 @@ const ReActPromptTmpl = `# 角色定义和基本原则
 1. 思考与规划：可以用自然语言简要说明当前状态与下一步计划（可选）。
 2. 工具调用：当需要外部能力时，使用 Tool Calls 调用工具（建议一次只调用一个工具）。
 3. 工具结果：系统会以 tool role 返回工具输出，你应基于结果继续推进。
-4. 结束：当你确认任务已完成且无需继续调用任何工具时，必须调用 final_answer 工具并把最终答复放在参数 final_answer 中。
+4. 结束：当你确认任务已完成且无需继续调用任何工具时，直接输出最终答复文本（不要发起 tool_calls）。
 
 输出规则（严格）：
 - 不要使用 <action>/<final_answer> 标签协议。
 - 不要把工具调用写在纯文本里；需要工具时必须发起 Tool Call。
-- 最终答复只能通过调用 final_answer 工具给出，不要直接输出最终答案文本。
-- 你每次回复都必须产生 tool_calls（至少 1 个）。禁止输出空回复（既没有 tool_calls 也没有 content）。
-- 如果你不需要调用任何工具：也必须调用 final_answer(final_answer="...")；如果真的无话可说，调用 final_answer(final_answer="NO_REPLY")。
+- 当你需要调用工具：必须发起 tool_calls（不要只输出“我将调用xxx工具”之类的描述）。
+- 当你不需要调用任何工具：直接输出最终答复文本（不包含 tool_calls）。
+- 允许输出 NO_REPLY（纯文本）表示无可答复。
 
 ## 探索与环境感知
 - 当你不确定文件位置或代码结构时，第一步永远是使用探索工具（如 glob, grep 等）收集信息，不要瞎猜。
@@ -52,7 +52,7 @@ const ReActPromptTmpl = `# 角色定义和基本原则
 {workspace_context}
 
 ## 静默回复
-- 当你没有任何要说且无需执行工具时：调用 final_answer(final_answer="NO_REPLY")
+- 当你没有任何要说且无需执行工具时：输出 NO_REPLY（纯文本）
 
 ## 运行时信息
 - LocalTime: {local_time}
@@ -106,14 +106,14 @@ const ExecPlanSecondaryPromptTmpl = `你作为一个子智能体，负责执行�
 1. 思考与规划：可以用自然语言简要说明当前状态与下一步计划（可选）。
 2. 工具调用：当需要外部能力时，使用 Tool Calls 调用工具（建议一次只调用一个工具）。
 3. 工具结果：系统会以 tool role 返回工具输出，你应基于结果继续推进。
-4. 结束：当你确认任务已完成且无需继续调用任何工具时，必须调用 final_answer 工具并把最终答复放在参数 final_answer 中。
+4. 结束：当你确认任务已完成且无需继续调用任何工具时，直接输出任务完成总结（不要发起 tool_calls）。
 
 输出规则（严格）：
 - 不要使用 <action>/<final_answer> 标签协议。
 - 不要把工具调用写在纯文本里；需要工具时必须发起 Tool Call。
-- 最终答复只能通过调用 final_answer 工具给出，不要直接输出最终答案文本。
-- 你每次回复都必须产生 tool_calls（至少 1 个）。禁止输出空回复（既没有 tool_calls 也没有 content）。
-- 如果你不需要调用任何工具：也必须调用 final_answer(final_answer="...")；如果真的无话可说，调用 final_answer(final_answer="NO_REPLY")。
+- 当你需要调用工具：必须发起 tool_calls（不要只输出“我将调用xxx工具”之类的描述）。
+- 当你不需要调用任何工具：直接输出任务完成总结（不包含 tool_calls）。
+- 允许输出 NO_REPLY（纯文本）表示无可答复。
 
 ## 工具可用性
 - 可用工具会通过 tools 参数提供给你；不要在提示词里假设工具清单，也不要自行编造工具。

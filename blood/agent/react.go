@@ -129,25 +129,8 @@ func (a *ReActAgent) RunWithMessages(messages []schema.OpenAIMessage) (RunResult
 
 	wc := workspace.NewWorkspaceContextForPurpose(a.purpose)
 	thoughts := make([]string, 0, 8)
-	tools := append(mcp.ToOpenAITools(), schema.OpenAITool{
-		Type: "function",
-		Function: schema.OpenAIFunctionToolSpec{
-			Name:        "final_answer",
-			Description: "结束对话并返回最终答复。只在确认无需继续调用其他任何工具时调用。",
-			Parameters: map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"final_answer": map[string]any{
-						"type":        "string",
-						"description": "给用户的最终答复内容。",
-					},
-				},
-				"required":             []string{"final_answer"},
-				"additionalProperties": false,
-			},
-		},
-	})
-	consecutiveNoToolCalls := 0
+	tools := mcp.ToOpenAITools()
+	consecutiveEmptyAssistant := 0
 	steps := 0
 	consecutiveToolErrors := 0
 	lastToolErrorKey := ""
@@ -190,14 +173,14 @@ func (a *ReActAgent) RunWithMessages(messages []schema.OpenAIMessage) (RunResult
 		}
 
 		if len(msg.ToolCalls) == 0 {
-			consecutiveNoToolCalls++
-			if fallback := extractFallbackFinalAnswer(msg.Content); fallback != "" {
+			if strings.EqualFold(strings.TrimSpace(msg.FinishReason), "tool_calls") {
+				return RunResult{}, fmt.Errorf("assistant finish_reason=tool_calls 但未返回 tool_calls：%s", strings.TrimSpace(msg.Content))
+			}
+
+			fallback := strings.TrimSpace(extractFallbackFinalAnswer(msg.Content))
+			if fallback != "" {
 				if len(extractEmbeddedActions(fallback)) > 0 {
-					return RunResult{}, fmt.Errorf("assistant 未返回 tool_calls，且输出中包含 <action>：%s", strings.TrimSpace(fallback))
-				}
-				fallback = strings.TrimSpace(fallback)
-				if fallback == "" {
-					fallback = "NO_REPLY"
+					return RunResult{}, fmt.Errorf("assistant 输出中包含 <action>：%s", strings.TrimSpace(fallback))
 				}
 				if len(hooks.FinalAnswerHandlers) > 0 {
 					msgSnapshot := append([]schema.OpenAIMessage(nil), messages...)
@@ -212,66 +195,23 @@ func (a *ReActAgent) RunWithMessages(messages []schema.OpenAIMessage) (RunResult
 					FinalAnswer: fallback,
 				}, nil
 			}
-			if consecutiveNoToolCalls >= 2 {
-				return RunResult{}, fmt.Errorf("assistant 未返回 tool_calls（需要调用工具或 final_answer）: %s", strings.TrimSpace(msg.Content))
+
+			consecutiveEmptyAssistant++
+			if consecutiveEmptyAssistant >= 2 {
+				return RunResult{}, fmt.Errorf("assistant 返回空内容且无 tool_calls（finish_reason=%q）", strings.TrimSpace(msg.FinishReason))
 			}
 			messages = append(messages, schema.OpenAIMessage{
 				Role:    schema.OpenAIMessageRoleUser,
-				Content: "强制要求：你的下一条 assistant 消息必须包含 tool_calls（至少 1 个）。需要工具就调用对应工具；如果任务已完成或无需继续用工具，也必须调用 final_answer(final_answer=...)；如果真的无话可说，调用 final_answer(final_answer=\"NO_REPLY\")。禁止只输出纯文本；禁止空回复（既没有 tool_calls 也没有 content）。",
+				Content: "你的上一条回复为空。请继续输出完整答复；如果需要调用工具，请直接发起 tool call。",
 			})
 			continue
 		}
-		consecutiveNoToolCalls = 0
+		consecutiveEmptyAssistant = 0
 
 		for _, tc := range msg.ToolCalls {
 			toolName := strings.TrimSpace(tc.Function.Name)
 			if toolName == "" {
 				continue
-			}
-
-			if toolName == "final_answer" {
-				finalText, parseErr := parseFinalAnswerArgs(tc.Function.Arguments)
-				if parseErr != nil {
-					messages = append(messages, schema.OpenAIMessage{
-						Role:       schema.OpenAIMessageRoleTool,
-						ToolCallID: tc.ID,
-						Content:    "ERROR: final_answer 参数解析失败: " + parseErr.Error(),
-					})
-					messages = append(messages, schema.OpenAIMessage{
-						Role:    schema.OpenAIMessageRoleUser,
-						Content: `final_answer 工具调用失败：arguments 必须是合法 JSON 对象，例如 {"final_answer":"..."}。请重新调用 final_answer，并保证 JSON 可解析且字段名为 final_answer。`,
-					})
-					continue
-				}
-				if len(extractEmbeddedActions(finalText)) > 0 {
-					messages = append(messages, schema.OpenAIMessage{
-						Role:       schema.OpenAIMessageRoleTool,
-						ToolCallID: tc.ID,
-						Content:    "ERROR: final_answer 里检测到 <action> 标签。请不要把 action 写进 final_answer；需要工具请直接发起 tool call。",
-					})
-					messages = append(messages, schema.OpenAIMessage{
-						Role:    schema.OpenAIMessageRoleUser,
-						Content: `final_answer 只允许输出最终答复文本。需要继续用工具请直接发起对应 tool call；不要把 <action> 写进 final_answer。请重新调用 final_answer。`,
-					})
-					continue
-				}
-
-				finalText = strings.TrimSpace(finalText)
-				if finalText == "" {
-					finalText = "NO_REPLY"
-				}
-				if len(hooks.FinalAnswerHandlers) > 0 {
-					msgSnapshot := append([]schema.OpenAIMessage(nil), messages...)
-					hooks.EmitFinalAnswer(sp, msgSnapshot, finalText)
-				} else if noHooks {
-					fmt.Println("✅Final Answer:", finalText)
-				}
-				a.Mcp.CleanupRun(runID)
-				cleaned = true
-				return RunResult{
-					Thought:     strings.Join(thoughts, "\n"),
-					FinalAnswer: finalText,
-				}, nil
 			}
 
 			payload, payloadErr := toolArgsToPayload(tc.Function.Arguments)
@@ -340,23 +280,6 @@ func (a *ReActAgent) RunWithMessages(messages []schema.OpenAIMessage) (RunResult
 			}
 		}
 	}
-}
-
-func parseFinalAnswerArgs(arguments string) (string, error) {
-	arguments = strings.TrimSpace(arguments)
-	if arguments == "" {
-		return "", nil
-	}
-	var obj map[string]any
-	if err := json.Unmarshal([]byte(arguments), &obj); err != nil {
-		return "", err
-	}
-	if v, ok := obj["final_answer"]; ok {
-		if s, ok := v.(string); ok {
-			return s, nil
-		}
-	}
-	return "", nil
 }
 
 func toolArgsToPayload(arguments string) (string, error) {

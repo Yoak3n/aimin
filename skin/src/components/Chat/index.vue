@@ -50,7 +50,7 @@
                 </div>
               </div>
             </div>
-            <div v-if="m.content" class="chat__section chat__section--answer">
+            <div v-if="m.content && (!m.finalAnswer || m.content.trim() !== m.finalAnswer.trim())" class="chat__section chat__section--response">
               <div class="chat__section-title">Response</div>
               <div class="chat__section-body">{{ m.content }}</div>
             </div>
@@ -379,13 +379,30 @@ function handleReply(data: WsReplyMessageData) {
     const prevRaw = taskToRaw.get(data.task_id) ?? "";
     const parsedPrev = parseAgentRaw(prevRaw);
     taskToRaw.set(data.task_id, prevRaw ? `${prevRaw}${data.result.content}` : data.result.content);
+    const finalText = String(data.result.content ?? "").trim();
+    const prevText = String(parsedPrev.content ?? "").trim();
+    const shouldSplit = Boolean(parsedPrev.thought) || (parsedPrev.toolCalls?.length ?? 0) > 0;
+
+    if (!shouldSplit || prevText === finalText) {
+      upsertAgentStructuredReply(
+        data.task_id,
+        {
+          content: finalText,
+          toolCalls: parsedPrev.toolCalls,
+          thought: parsedPrev.thought,
+          finalAnswer: undefined,
+        },
+        false
+      );
+      return;
+    }
     upsertAgentStructuredReply(
       data.task_id,
       {
         content: parsedPrev.content,
         toolCalls: parsedPrev.toolCalls,
         thought: parsedPrev.thought,
-        finalAnswer: String(data.result.content ?? "").trim(),
+        finalAnswer: finalText,
       },
       false
     );
@@ -789,6 +806,20 @@ watch(
   border: 1px solid #d7e6ff;
   background: #f4f9ff;
   color: #111;
+}
+
+.chat__section--response {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px dashed #e2e2e2;
+  background: #fafafa;
+  color: #333;
+}
+
+.chat__section--response .chat__section-body {
+  font-size: 13px;
+  line-height: 1.55;
+  font-weight: 400;
 }
 
 .chat__section--answer .chat__section-body {
