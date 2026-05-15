@@ -2,21 +2,30 @@ package conversation
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/Yoak3n/aimin/blood/schema"
+	schemaws "github.com/Yoak3n/aimin/blood/schema/ws"
+	"github.com/Yoak3n/aimin/cerebrum/agent"
+	"github.com/Yoak3n/aimin/hand/interactive"
 )
 
 type Input struct {
 	question string
 	id       string
+	from     string
 }
 
 type Conversation struct {
-	Id           string                 `json:"id"`
-	Messages     []schema.OpenAIMessage `json:"messages"`
-	systemPrompt string
+	Id       string                 `json:"id"`
+	From     string                 `json:"from"`
+	Messages []schema.OpenAIMessage `json:"messages"`
+	agent    *agent.ConversationAgent
 }
 
 type Manager struct {
@@ -26,7 +35,7 @@ type Manager struct {
 	timer           *time.Timer
 	ctx             context.Context
 	running         bool
-	replyHandler    func(id string, content string)
+	mu              sync.Mutex
 }
 
 var manager *Manager
@@ -40,10 +49,6 @@ func NewManager() *Manager {
 		ctx:             context.Background(),
 	}
 	return m
-}
-
-func (m *Manager) SetReplyHandler(h func(id string, content string)) {
-	m.replyHandler = h
 }
 
 func GetManager() *Manager {
@@ -61,7 +66,7 @@ func (m *Manager) setTimeout() {
 	}
 }
 
-func (m *Manager) EntryConversation(conversationId string, question string) {
+func (m *Manager) EntryConversation(conversationId string, from string, question string) {
 	if !m.running {
 		m.running = true
 		m.setTimeout()
@@ -70,6 +75,7 @@ func (m *Manager) EntryConversation(conversationId string, question string) {
 	m.data <- Input{
 		question: question,
 		id:       conversationId,
+		from:     from,
 	}
 }
 
@@ -90,7 +96,72 @@ func (m *Manager) ConversationLoop() {
 }
 
 func (m *Manager) executeConversation(data Input) {
+	from := strings.TrimSpace(data.from)
+	id := strings.TrimSpace(data.id)
+	q := strings.TrimSpace(data.question)
+	if from == "" || id == "" || q == "" {
+		return
+	}
 
+	m.setTimeout()
+	key := from + "|" + id
+	m.mu.Lock()
+	c := m.conversationMap[key]
+	if c == nil || c.agent == nil {
+		c = &Conversation{
+			Id:    id,
+			From:  from,
+			agent: interactive.NewConversationTask(id, from),
+		}
+		m.conversationMap[key] = c
+	}
+	m.mu.Unlock()
+
+	roundID, _, _ := interactive.BeginInterruptibleRound(from)
+	_, err := c.agent.Ask(q)
+	interactive.EndInterruptibleRound(from, roundID)
+	if err == nil {
+		return
+	}
+
+	if errors.Is(err, context.Canceled) {
+		msg := schemaws.NewReplyMessage(schemaws.ReplyStatusFinish, id, "[已打断]")
+		b, _ := json.Marshal(msg)
+		if interactive.WSReplyBroadcast != nil {
+			interactive.WSReplyBroadcast(from, b)
+		}
+		return
+	}
+	msg := schemaws.NewReplyMessage(schemaws.ReplyStatusFinish, id, fmt.Sprintf("[错误] %v", err))
+	b, _ := json.Marshal(msg)
+	if interactive.WSReplyBroadcast != nil {
+		interactive.WSReplyBroadcast(from, b)
+	}
+}
+
+func (m *Manager) AskDirect(conversationId string, from string, question string) error {
+	from = strings.TrimSpace(from)
+	id := strings.TrimSpace(conversationId)
+	q := strings.TrimSpace(question)
+	if from == "" || id == "" || q == "" {
+		return nil
+	}
+
+	key := from + "|" + id
+	m.mu.Lock()
+	c := m.conversationMap[key]
+	if c == nil || c.agent == nil {
+		c = &Conversation{
+			Id:    id,
+			From:  from,
+			agent: interactive.NewConversationTask(id, from),
+		}
+		m.conversationMap[key] = c
+	}
+	m.mu.Unlock()
+
+	_, err := c.agent.Ask(q)
+	return err
 }
 
 func (m *Manager) exitConversation() {

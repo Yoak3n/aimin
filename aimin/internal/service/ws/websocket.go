@@ -259,9 +259,6 @@ func (wh *WebSocketHub) listen(id string, conn *websocket.Conn) {
 
 func (wh *WebSocketHub) sendTask() {
 	for task := range wh.Tasks {
-		if wh.tryHandleConversationTask(task) {
-			continue
-		}
 		fsmTask := fsm.TaskData{
 			ID:   task.ID,
 			Type: int(task.Type),
@@ -271,20 +268,6 @@ func (wh *WebSocketHub) sendTask() {
 		}
 		componet.GetGlobalComponent().AddTask(fsmTask)
 	}
-}
-
-func (wh *WebSocketHub) tryHandleConversationTask(task schema.TaskData) bool {
-
-	question := ""
-	if s, ok := task.Payload.(string); ok {
-		question = s
-	}
-	if question == "" {
-		wh.BroadcastLog(fmt.Sprintf("[Task][%d] payload 缺少 question", task.Type))
-		return true
-	}
-
-	return false
 }
 
 func sendLog(conn *websocket.Conn, content string) {

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	schemaws "github.com/Yoak3n/aimin/blood/schema/ws"
-	"github.com/Yoak3n/aimin/cerebrum/agent"
 	"github.com/Yoak3n/aimin/dna/fsm"
 	"github.com/Yoak3n/aimin/hand/interactive"
 )
@@ -21,6 +20,8 @@ const (
 	TaskDataKey  = "task_data"
 	TaskQueueKey = "task_queue"
 )
+
+var TaskExecutor func(id, from, question string) error
 
 func NewTaskState() fsm.State {
 	return fsm.NewTaskState(Task, Task, makeTaskAction())
@@ -38,16 +39,15 @@ func makeTaskAction() func(ctx *fsm.Context) string {
 		if started {
 			return
 		}
+		if TaskExecutor == nil {
+			panic("decision.TaskExecutor is required (no fallback)")
+		}
 		started = true
 		stopCh = make(chan struct{})
 		questionCh = make(chan fsm.TaskData, 32)
 		lastActivity = time.Now()
 
 		go func() {
-			var conv *agent.ConversationAgent
-			var convID string
-			var convFrom string
-
 			for {
 				select {
 				case <-stopCh:
@@ -62,15 +62,9 @@ func makeTaskAction() func(ctx *fsm.Context) string {
 						continue
 					}
 
-					if conv == nil || convID != td.ID || convFrom != td.From {
-						convID = td.ID
-						convFrom = td.From
-						conv = interactive.NewConversationTask(td.ID, td.From)
-					}
-
 					atomic.StoreInt32(&busy, 1)
 					roundID, _, _ := interactive.BeginInterruptibleRound(td.From)
-					_, err := conv.Ask(q)
+					err := TaskExecutor(td.ID, td.From, q)
 					interactive.EndInterruptibleRound(td.From, roundID)
 					atomic.StoreInt32(&busy, 0)
 					if err != nil {

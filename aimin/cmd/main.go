@@ -6,7 +6,9 @@ import (
 	"github.com/Yoak3n/aimin/aimin/internal/service/ws"
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/dna/action"
+	"github.com/Yoak3n/aimin/dna/decision"
 	"github.com/Yoak3n/aimin/hand/interactive"
+	"github.com/Yoak3n/aimin/tongue/conversation"
 )
 
 func init() {
@@ -17,8 +19,9 @@ func init() {
 	logger.SetExternalHandler(hub.BroadcastLog)
 	action.RemoteAsk = hub.Ask
 	interactive.WSReplyBroadcast = hub.SendToClient
-
-	// conversation.GetManager().SetReplyHandler(hub.SendReply)
+	decision.TaskExecutor = func(id, from, question string) error {
+		return conversation.GetManager().AskDirect(id, from, question)
+	}
 
 	c := componet.GetGlobalComponent()
 	c.FSM().SetOnStateChange(hub.BroadcastState)
