@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Yoak3n/aimin/blood/schema"
@@ -69,6 +70,19 @@ func CurrentInterruptErr(clientID string) error {
 	return ctx.Err()
 }
 
+func InterruptContext(clientID string) context.Context {
+	if clientID == "" {
+		return context.Background()
+	}
+	interruptMu.Lock()
+	ctx := interruptCtxByClient[clientID]
+	interruptMu.Unlock()
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
+}
+
 func HasInterruptibleRound(clientID string) bool {
 	if clientID == "" {
 		return false
@@ -111,25 +125,30 @@ func NewConversationTask(id, from string) *agent.ConversationAgent {
 	base := agent.NewAgent(workspace.PromptPurposeReAct)
 	conv := agent.NewConversationAgent(base)
 	conv.SetMaxTurns(8)
-	chunkIdx := 1
+	var chunkIdx atomic.Int64
+	chunkIdx.Store(1)
 
-	base.RegisterAssistantDeltaHandler(func(delta string) error {
+	base.RegisterAssistantDeltaHandler(func(reasoning string, delta string) error {
 		if err := CurrentInterruptErr(from); err != nil {
 			return err
 		}
+		if reasoning == "" && delta == "" {
+			return nil
+		}
+		idx := chunkIdx.Add(1) - 1
 		msg := schemaws.WebsocketMessage{
 			Action: schemaws.ReplyMessage,
 			Data: &schemaws.ReplyMessageData{
 				TaskID: id,
 				Status: schemaws.ReplyStatusProcessing,
 				Chunk: &schemaws.ReplyChunkData{
-					TaskID:   id,
-					ChunkIdx: chunkIdx,
-					Content:  delta,
+					TaskID:           id,
+					ChunkIdx:         int(idx),
+					ReasoningContent: reasoning,
+					Content:          delta,
 				},
 			},
 		}
-		chunkIdx++
 		buf, _ := json.Marshal(msg)
 		if WSReplyBroadcast != nil {
 			WSReplyBroadcast(from, buf)
@@ -164,7 +183,7 @@ func NewConversationTask(id, from string) *agent.ConversationAgent {
 				},
 			},
 		}
-		chunkIdx = 0
+		chunkIdx.Store(1)
 		buf, _ := json.Marshal(msg)
 		if WSReplyBroadcast != nil {
 			WSReplyBroadcast(from, buf)

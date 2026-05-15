@@ -7,7 +7,7 @@ type AgentHooks struct {
 	ActionHandlers         []func(string)
 	ToolResultHandlers     []func(toolCallID string, action string, result string, err error)
 	FinalAnswerHandlers    []func(systemPrompt string, messages []schema.OpenAIMessage, finalAnswer string)
-	AssistantDeltaHandlers []func(string) error
+	AssistantDeltaHandlers []func(string, string) error
 	LLMResponseHandlers    []func(systemPrompt string, messages []schema.OpenAIMessage, response string)
 	AudioHandlers          []func(format, voice, audioBase64 string, bytes int)
 }
@@ -54,7 +54,7 @@ func (h *AgentHooks) AddFinalAnswerHandler(f func(systemPrompt string, messages 
 	h.FinalAnswerHandlers = append(h.FinalAnswerHandlers, f)
 }
 
-func (h *AgentHooks) AddAssistantDeltaHandler(f func(string) error) {
+func (h *AgentHooks) AddAssistantDeltaHandler(f func(string, string) error) {
 	if f == nil {
 		return
 	}
@@ -98,9 +98,9 @@ func (h *AgentHooks) EmitLLMResponse(systemPrompt string, messages []schema.Open
 	}
 }
 
-func (h *AgentHooks) EmitAssistantDelta(v string) error {
+func (h *AgentHooks) EmitAssistantDelta(r string, c string) error {
 	for _, f := range h.AssistantDeltaHandlers {
-		if err := f(v); err != nil {
+		if err := f(r, c); err != nil {
 			return err
 		}
 	}

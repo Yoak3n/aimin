@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,14 +12,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/blood/config"
+	"github.com/Yoak3n/aimin/blood/pkg/helper"
+	"github.com/Yoak3n/aimin/blood/pkg/logger"
+	"github.com/Yoak3n/aimin/blood/schema"
 	"github.com/Yoak3n/aimin/bone/mcp"
 	"github.com/Yoak3n/aimin/bone/skill"
 	"github.com/Yoak3n/aimin/bone/workspace"
 	"github.com/Yoak3n/aimin/lung/llm"
-	"github.com/Yoak3n/aimin/blood/pkg/helper"
-	"github.com/Yoak3n/aimin/blood/schema"
 )
 
 type RunResult struct {
@@ -95,7 +96,7 @@ func (a *ReActAgent) RegisterFinalAnswerHandler(h func(systemPrompt string, mess
 	a.ensureHooks().AddFinalAnswerHandler(h)
 }
 
-func (a *ReActAgent) RegisterAssistantDeltaHandler(h func(string) error) {
+func (a *ReActAgent) RegisterAssistantDeltaHandler(h func(string, string) error) {
 	a.ensureHooks().AddAssistantDeltaHandler(h)
 }
 
@@ -107,7 +108,10 @@ func (a *ReActAgent) RegisterAudioHandler(h func(format, voice, audioBase64 stri
 	a.ensureHooks().AddAudioHandler(h)
 }
 
-func (a *ReActAgent) RunWithMessages(messages []schema.OpenAIMessage) (RunResult, error) {
+func (a *ReActAgent) RunWithMessages(ctx context.Context, messages []schema.OpenAIMessage) (RunResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	hooks := a.ensureHooks()
 	noHooks := hooks.IsEmpty()
 	if len(messages) == 0 {
@@ -142,11 +146,11 @@ func (a *ReActAgent) RunWithMessages(messages []schema.OpenAIMessage) (RunResult
 		sp := wc.String(a.choice)
 		_ = os.WriteFile("sp.md", []byte(sp), 0644)
 		dumpLLMInput(runID, steps, sp, tools, messages)
-		var onDelta func(string) error
+		var onDelta func(string, string) error
 		if len(hooks.AssistantDeltaHandlers) > 0 {
 			onDelta = hooks.EmitAssistantDelta
 		}
-		msg, err := llm.ChatStreamWith(chater, messages, tools, onDelta, sp)
+		msg, err := llm.ChatStreamWith(ctx, chater, messages, tools, onDelta, sp)
 		if err != nil {
 			logger.Logger.Error("LLM调用失败", err)
 			return RunResult{}, err
@@ -344,7 +348,7 @@ func (a *ReActAgent) Run(input string) {
 		fmt.Println("输入为空")
 		return
 	}
-	_, _ = a.RunWithMessages([]schema.OpenAIMessage{
+	_, _ = a.RunWithMessages(context.Background(), []schema.OpenAIMessage{
 		{
 			Role:    schema.OpenAIMessageRoleUser,
 			Content: fmt.Sprintf("<question>%s</question>", input),

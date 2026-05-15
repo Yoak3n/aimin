@@ -1,8 +1,8 @@
 package agent
 
 import (
-	"github.com/Yoak3n/aimin/bone/mcp"
 	"github.com/Yoak3n/aimin/blood/schema"
+	"github.com/Yoak3n/aimin/bone/mcp"
 )
 
 type ExecPlanAgent struct {
@@ -32,7 +32,7 @@ func (e *ExecPlanAgent) RegisterFinalAnswerHandler(h func(systemPrompt string, m
 	e.ensureHooks().AddFinalAnswerHandler(h)
 }
 
-func (e *ExecPlanAgent) RegisterAssistantDeltaHandler(h func(string) error) {
+func (e *ExecPlanAgent) RegisterAssistantDeltaHandler(h func(string, string) error) {
 	e.ensureHooks().AddAssistantDeltaHandler(h)
 }
 
@@ -74,7 +74,7 @@ func (es *ExecPlanSubAgent) RegisterFinalAnswerHandler(h func(systemPrompt strin
 	es.ensureHooks().AddFinalAnswerHandler(h)
 }
 
-func (es *ExecPlanSubAgent) RegisterAssistantDeltaHandler(h func(string) error) {
+func (es *ExecPlanSubAgent) RegisterAssistantDeltaHandler(h func(string, string) error) {
 	es.ensureHooks().AddAssistantDeltaHandler(h)
 }
 

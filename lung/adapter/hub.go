@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -323,13 +324,13 @@ func (h *LLMAdapterHub) Chat(userMessages []schema.OpenAIMessage, systemPrompt s
 	return "", fmt.Errorf("LLM 调用失败：没有可用的 chat 适配器")
 }
 
-func (h *LLMAdapterHub) ChatStream(userMessages []schema.OpenAIMessage, onDelta func(string) error, systemPrompt ...string) (string, error) {
+func (h *LLMAdapterHub) ChatStream(ctx context.Context, userMessages []schema.OpenAIMessage, onDelta func(string, string) error, systemPrompt ...string) (string, error) {
 	sp := ""
 	if len(systemPrompt) > 0 {
 		// TODO 这里应该有一个默认的系统提示词
 		sp = systemPrompt[0]
 	}
-	for attempt := 0; attempt < 2; attempt++ {
+	for range 2 {
 		active := h.chatModelByType(config.LLMTypeChat)
 		adapter, key, err := h.getAdapterByTypeWithKey(config.LLMTypeChat, active)
 		if err != nil {
@@ -341,7 +342,7 @@ func (h *LLMAdapterHub) ChatStream(userMessages []schema.OpenAIMessage, onDelta 
 			return "", err
 		}
 
-		resp, callErr := adapter.ChatStream(userMessages, nil, onDelta, sp)
+		resp, callErr := adapter.ChatStream(ctx, userMessages, nil, onDelta, sp)
 		if disable, d := classifyLLMFailure(callErr); disable {
 			h.disableAdapter(key, d)
 			if adapter != nil {
@@ -355,7 +356,7 @@ func (h *LLMAdapterHub) ChatStream(userMessages []schema.OpenAIMessage, onDelta 
 	return "", fmt.Errorf("LLM 调用失败：没有可用的 chat 适配器")
 }
 
-func (h *LLMAdapterHub) ChatStreamWithTools(userMessages []schema.OpenAIMessage, tools []schema.OpenAITool, onDelta func(string) error, systemPrompt ...string) (schema.OpenAIMessage, error) {
+func (h *LLMAdapterHub) ChatStreamWithTools(ctx context.Context, userMessages []schema.OpenAIMessage, tools []schema.OpenAITool, onDelta func(string, string) error, systemPrompt ...string) (schema.OpenAIMessage, error) {
 	sp := ""
 	if len(systemPrompt) > 0 {
 		sp = systemPrompt[0]
@@ -372,7 +373,7 @@ func (h *LLMAdapterHub) ChatStreamWithTools(userMessages []schema.OpenAIMessage,
 			return schema.OpenAIMessage{}, err
 		}
 
-		resp, callErr := adapter.ChatStream(userMessages, tools, onDelta, sp)
+		resp, callErr := adapter.ChatStream(ctx, userMessages, tools, onDelta, sp)
 		if disable, d := classifyLLMFailure(callErr); disable {
 			h.disableAdapter(key, d)
 			if adapter != nil {

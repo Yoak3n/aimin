@@ -49,9 +49,10 @@ type ReplyMessageData struct {
 }
 
 type ReplyChunkData struct {
-	TaskID   string `json:"task_id"`
-	ChunkIdx int    `json:"chunk_idx"`
-	Content  string `json:"content"`
+	TaskID           string `json:"task_id"`
+	ChunkIdx         int    `json:"chunk_idx"`
+	ReasoningContent string `json:"reasoning_content,omitempty"`
+	Content          string `json:"content"`
 }
 
 type ReplyFinishData struct {

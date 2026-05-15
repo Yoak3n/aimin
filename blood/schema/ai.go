@@ -1,7 +1,5 @@
 package schema
 
-import "encoding/json"
-
 const (
 	OpenAIMessageRoleUser      = "user"
 	OpenAIMessageRoleAssistant = "assistant"
@@ -14,7 +12,7 @@ type OpenAIMessageRole string
 type OpenAIMessage struct {
 	Role         OpenAIMessageRole `json:"role"`
 	Content      string            `json:"content,omitempty"`
-	Reasoning    json.RawMessage   `json:"reasoning_content,omitempty"`
+	Reasoning    string            `json:"reasoning_content,omitempty"`
 	ToolCalls    []OpenAIToolCall  `json:"tool_calls,omitempty"`
 	ToolCallID   string            `json:"tool_call_id,omitempty"`
 	FinishReason string            `json:"finish_reason,omitempty"`

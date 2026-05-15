@@ -3,15 +3,18 @@ package adapter
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/Yoak3n/aimin/blood/config"
+	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/blood/schema"
 )
 
@@ -21,7 +24,7 @@ const defaultEmbeddingRequestTimeout = 30 * time.Second
 
 type LLMAdapter interface {
 	Chat(userMessages []schema.OpenAIMessage, systemPrompt ...string) (string, error)
-	ChatStream(userMessages []schema.OpenAIMessage, tools []schema.OpenAITool, onDelta func(string) error, systemPrompt ...string) (schema.OpenAIMessage, error)
+	ChatStream(ctx context.Context, userMessages []schema.OpenAIMessage, tools []schema.OpenAITool, onDelta func(string, string) error, systemPrompt ...string) (schema.OpenAIMessage, error)
 	Embedding(text []string) ([][]float32, error)
 	GetConfig() *config.LLMConfig
 }
@@ -81,10 +84,10 @@ func buildChatMessages(c *config.LLMConfig, systemPrompt string, userMessages []
 			m["tool_calls"] = msg.ToolCalls
 		}
 
-		if len(msg.Reasoning) > 0 {
+		if msg.Reasoning != "" {
 			m["reasoning_content"] = msg.Reasoning
 		} else if opt.ForceAssistantReasoning && role == string(schema.OpenAIMessageRoleAssistant) && len(msg.ToolCalls) > 0 {
-			m["reasoning_content"] = json.RawMessage(`""`)
+			m["reasoning_content"] = ""
 		}
 
 		if role == string(schema.OpenAIMessageRoleTool) && strings.TrimSpace(msg.ToolCallID) == "" {
@@ -93,7 +96,7 @@ func buildChatMessages(c *config.LLMConfig, systemPrompt string, userMessages []
 		if c != nil {
 			provider := strings.ToLower(strings.TrimSpace(c.Provider))
 			if provider == "deepseek" && c.Type == config.LLMTypeThink {
-				if role == string(schema.OpenAIMessageRoleAssistant) && len(msg.ToolCalls) > 0 && len(msg.Reasoning) == 0 {
+				if role == string(schema.OpenAIMessageRoleAssistant) && len(msg.ToolCalls) > 0 && msg.Reasoning == "" {
 					return nil, fmt.Errorf("deepseek think mode: assistant tool-call message missing reasoning_content")
 				}
 			}
@@ -142,7 +145,10 @@ func (b *BaseAdapter) Chat(userMessages []schema.OpenAIMessage, systemMessage ..
 	return b.makeRequest(reqBody)
 }
 
-func (b *BaseAdapter) ChatStream(userMessages []schema.OpenAIMessage, tools []schema.OpenAITool, onDelta func(string) error, systemMessage ...string) (schema.OpenAIMessage, error) {
+func (b *BaseAdapter) ChatStream(ctx context.Context, userMessages []schema.OpenAIMessage, tools []schema.OpenAITool, onDelta func(string, string) error, systemMessage ...string) (schema.OpenAIMessage, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	systemPrompt := ""
 	if len(systemMessage) == 0 {
 		systemPrompt = defaultSystemPrompt
@@ -177,7 +183,7 @@ func (b *BaseAdapter) ChatStream(userMessages []schema.OpenAIMessage, tools []sc
 		return schema.OpenAIMessage{}, fmt.Errorf("序列化请求失败: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", b.config.APIUrl, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST", b.config.APIUrl, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return schema.OpenAIMessage{}, fmt.Errorf("创建请求失败: %w", err)
 	}
@@ -213,6 +219,9 @@ func (b *BaseAdapter) ChatStream(userMessages []schema.OpenAIMessage, tools []sc
 		line, readErr := reader.ReadString('\n')
 		line = strings.TrimSpace(line)
 		if line == "" {
+			continue
+		}
+		if line == "" {
 			if readErr != nil {
 				if readErr == io.EOF {
 					break
@@ -228,45 +237,26 @@ func (b *BaseAdapter) ChatStream(userMessages []schema.OpenAIMessage, tools []sc
 				break
 			}
 
-			type toolCallDelta struct {
-				Index    int    `json:"index"`
-				ID       string `json:"id,omitempty"`
-				Type     string `json:"type,omitempty"`
-				Function struct {
-					Name      string `json:"name,omitempty"`
-					Arguments string `json:"arguments,omitempty"`
-				} `json:"function,omitempty"`
-			}
-			var chunk struct {
-				Choices []struct {
-					Delta struct {
-						Content   string          `json:"content"`
-						Reasoning json.RawMessage `json:"reasoning_content"`
-						ToolCalls []toolCallDelta `json:"tool_calls"`
-					} `json:"delta"`
-					FinishReason string            `json:"finish_reason"`
-					Message schema.OpenAIMessage `json:"message"`
-					Text    string               `json:"text"`
-				} `json:"choices"`
-			}
+			var chunk Chunk
 			if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
 				raw.WriteString(payload)
 			} else if len(chunk.Choices) > 0 {
+				// 获取finish_reason
 				if finishReason == "" && strings.TrimSpace(chunk.Choices[0].FinishReason) != "" {
 					finishReason = strings.TrimSpace(chunk.Choices[0].FinishReason)
 				}
+				// 获取reasoning_content
+				// 当buf中没有任何内容时，直接写入reasoning_raw
 				if len(reasoningRaw) == 0 {
 					if text, ok := decodeJSONString(chunk.Choices[0].Delta.Reasoning); ok {
 						reasoning.WriteString(text)
-					} else if len(chunk.Choices[0].Delta.Reasoning) > 0 && reasoning.Len() == 0 {
+						if onDelta != nil {
+							if err := onDelta(text, ""); err != nil {
+								return schema.OpenAIMessage{}, err
+							}
+						}
+					} else if len(chunk.Choices[0].Delta.Reasoning) > 0 && reasoning.Len() == 0 && string(chunk.Choices[0].Delta.Reasoning) != "null" {
 						reasoningRaw = append([]byte(nil), chunk.Choices[0].Delta.Reasoning...)
-					}
-				}
-				if reasoning.Len() == 0 && len(reasoningRaw) == 0 && len(chunk.Choices[0].Message.Reasoning) > 0 {
-					if text, ok := decodeJSONString(chunk.Choices[0].Message.Reasoning); ok {
-						reasoning.WriteString(text)
-					} else {
-						reasoningRaw = append([]byte(nil), chunk.Choices[0].Message.Reasoning...)
 					}
 				}
 
@@ -281,7 +271,7 @@ func (b *BaseAdapter) ChatStream(userMessages []schema.OpenAIMessage, tools []sc
 				if deltaText != "" {
 					content.WriteString(deltaText)
 					if onDelta != nil {
-						if err := onDelta(deltaText); err != nil {
+						if err := onDelta("", deltaText); err != nil {
 							return schema.OpenAIMessage{}, err
 						}
 					}
@@ -328,7 +318,7 @@ func (b *BaseAdapter) ChatStream(userMessages []schema.OpenAIMessage, tools []sc
 						continue
 					}
 					toolCallEmitted[tc.Index] = true
-					if err := onDelta(fmt.Sprintf("[tool_call] %s %s %s", current.ID, current.Function.Name, current.Function.Arguments)); err != nil {
+					if err := onDelta("", fmt.Sprintf("[tool_call] %s %s %s", current.ID, current.Function.Name, current.Function.Arguments)); err != nil {
 						return schema.OpenAIMessage{}, err
 					}
 				}
@@ -341,7 +331,7 @@ func (b *BaseAdapter) ChatStream(userMessages []schema.OpenAIMessage, tools []sc
 							var argsAny any
 							if err := json.Unmarshal([]byte(c.Function.Arguments), &argsAny); err == nil {
 								toolCallEmitted[i] = true
-								if err := onDelta(fmt.Sprintf("[tool_call] %s %s %s", c.ID, c.Function.Name, c.Function.Arguments)); err != nil {
+								if err := onDelta("", fmt.Sprintf("[tool_call] %s %s %s", c.ID, c.Function.Name, c.Function.Arguments)); err != nil {
 									return schema.OpenAIMessage{}, err
 								}
 							}
@@ -362,7 +352,7 @@ func (b *BaseAdapter) ChatStream(userMessages []schema.OpenAIMessage, tools []sc
 		}
 	}
 
-	if content.Len() > 0 || len(toolCallsByIndex) > 0 {
+	if content.Len() > 0 || len(toolCallsByIndex) > 0 || reasoning.Len() > 0 {
 		toolCalls := make([]schema.OpenAIToolCall, 0, len(toolCallsByIndex))
 		for i := 0; i < len(toolCallsByIndex); i++ {
 			tc := toolCallsByIndex[i]
@@ -374,28 +364,34 @@ func (b *BaseAdapter) ChatStream(userMessages []schema.OpenAIMessage, tools []sc
 			}
 			toolCalls = append(toolCalls, *tc)
 		}
-		var outReasoning json.RawMessage
+		var outReasoning string
 		if len(reasoningRaw) > 0 {
-			outReasoning = reasoningRaw
-		} else if reasoning.Len() > 0 {
-			if b, err := json.Marshal(reasoning.String()); err == nil {
-				outReasoning = b
+			var s string
+			if err := json.Unmarshal(reasoningRaw, &s); err == nil {
+				outReasoning = s
+			} else {
+				outReasoning = string(reasoningRaw)
 			}
+		} else if reasoning.Len() > 0 {
+			outReasoning = reasoning.String()
 		}
 		return schema.OpenAIMessage{
-			Role:      schema.OpenAIMessageRoleAssistant,
-			Content:   content.String(),
-			Reasoning: outReasoning,
-			ToolCalls: toolCalls,
+			Role:         schema.OpenAIMessageRoleAssistant,
+			Content:      content.String(),
+			Reasoning:    outReasoning,
+			ToolCalls:    toolCalls,
 			FinishReason: finishReason,
 		}, nil
 	}
 
+	//
+	logger.Logger.Errorf("流式响应失败 content: %s\n", raw.String())
 	if raw.Len() > 0 {
+		log.Printf("raw: %s\n", raw.String())
 		var response struct {
 			Choices []struct {
-				FinishReason string            `json:"finish_reason"`
-				Message schema.OpenAIMessage `json:"message"`
+				FinishReason string               `json:"finish_reason"`
+				Message      schema.OpenAIMessage `json:"message"`
 			} `json:"choices"`
 		}
 		if err := json.Unmarshal([]byte(raw.String()), &response); err == nil {
@@ -407,7 +403,7 @@ func (b *BaseAdapter) ChatStream(userMessages []schema.OpenAIMessage, tools []sc
 				msg.FinishReason = strings.TrimSpace(response.Choices[0].FinishReason)
 			}
 			if onDelta != nil && msg.Content != "" {
-				if err := onDelta(msg.Content); err != nil {
+				if err := onDelta("", msg.Content); err != nil {
 					return msg, err
 				}
 			}

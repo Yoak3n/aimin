@@ -117,7 +117,10 @@ func (wh *WebSocketHub) sendQuestion(req *QuestionRequest) {
 	wh.clientsMu.RUnlock()
 	for i, client := range clients {
 		k := ids[i]
-		if err := client.conn.WriteMessage(websocket.TextMessage, buf); err != nil {
+		client.mu.Lock()
+		err := client.conn.WriteMessage(websocket.TextMessage, buf)
+		client.mu.Unlock()
+		if err != nil {
 			client.conn.Close()
 			wh.clientsMu.Lock()
 			delete(wh.clients, k)
@@ -135,8 +138,10 @@ func (wh *WebSocketHub) sendQuestionToClient(req *QuestionRequest, client *Clien
 		},
 	}
 	buf, _ := json.Marshal(msg)
-	if err := client.conn.WriteMessage(websocket.TextMessage, buf); err != nil {
-		// handle error
+	client.mu.Lock()
+	err := client.conn.WriteMessage(websocket.TextMessage, buf)
+	client.mu.Unlock()
+	if err != nil {
 		log.Println("Error sending question to new client:", err)
 	}
 }
@@ -158,9 +163,9 @@ func (wh *WebSocketHub) Register(id string, conn *websocket.Conn) {
 		last: time.Now().Unix(),
 	}
 	wh.register <- client
-	sendLog(client.conn, "Connected successfully")
+	sendLog(client)
 	go wh.healthCheck(client)
-	wh.listen(id, conn)
+	wh.listen(client)
 }
 
 func (wh *WebSocketHub) healthCheck(client *Client) {
@@ -168,10 +173,12 @@ func (wh *WebSocketHub) healthCheck(client *Client) {
 	defer ticker.Stop()
 	for range ticker.C {
 		wh.clientsMu.RLock()
-		client.mu.RLock()
+		client.mu.Lock()
 		last := client.last
 		now := time.Now().Unix()
 		if (now - last) >= 180 {
+			client.mu.Unlock()
+			wh.clientsMu.RUnlock()
 			wh.unregister <- client.id
 			return
 		}
@@ -180,18 +187,19 @@ func (wh *WebSocketHub) healthCheck(client *Client) {
 			Data:   ws.PingMessage,
 		}
 		client.conn.WriteJSON(pingMessage)
-		client.mu.RUnlock()
+		client.mu.Unlock()
 		wh.clientsMu.RUnlock()
 	}
 }
 
-func (wh *WebSocketHub) listen(id string, conn *websocket.Conn) {
+func (wh *WebSocketHub) listen(client *Client) {
 	defer func() {
-		wh.unregister <- id
+		wh.unregister <- client.id
 	}()
+	conn := client.conn
 	for {
 		t, msg, err := conn.ReadMessage()
-		log.Println("T", t, id, string(msg))
+		log.Println("T", t, client.id, string(msg))
 		if err != nil || t == -1 {
 			break
 		}
@@ -208,16 +216,18 @@ func (wh *WebSocketHub) listen(id string, conn *websocket.Conn) {
 				Action: ws.PongMessage,
 				Data:   ws.PongMessage,
 			}
+			client.mu.Lock()
 			conn.WriteJSON(pongMessage)
+			client.mu.Unlock()
 		case ws.InterruptMessage:
-			ok := interactive.RequestInterrupt(id)
+			ok := interactive.RequestInterrupt(client.id)
 			if ok {
-				wh.BroadcastLog(fmt.Sprintf("[Interrupt] from=%s 已请求打断当前轮次", id))
+				wh.BroadcastLog(fmt.Sprintf("[Interrupt] from=%s 已请求打断当前轮次", client.id))
 			} else {
-				if interactive.HasInterruptibleRound(id) {
-					wh.BroadcastLog(fmt.Sprintf("[Interrupt] from=%s 已请求打断当前轮次", id))
+				if interactive.HasInterruptibleRound(client.id) {
+					wh.BroadcastLog(fmt.Sprintf("[Interrupt] from=%s 已请求打断当前轮次", client.id))
 				} else {
-					wh.BroadcastLog(fmt.Sprintf("[Interrupt] from=%s 当前没有可打断的任务", id))
+					wh.BroadcastLog(fmt.Sprintf("[Interrupt] from=%s 当前没有可打断的任务", client.id))
 				}
 			}
 		case ws.AddTaskMessage:
@@ -246,14 +256,9 @@ func (wh *WebSocketHub) listen(id string, conn *websocket.Conn) {
 			}
 			wh.AnswerChan <- payload
 		}
-		wh.clientsMu.RLock()
-		client, ok := wh.clients[id]
-		wh.clientsMu.RUnlock()
-		if ok {
-			client.mu.Lock()
-			client.last = time.Now().Unix()
-			client.mu.Unlock()
-		}
+		client.mu.Lock()
+		client.last = time.Now().Unix()
+		client.mu.Unlock()
 	}
 }
 
@@ -270,9 +275,11 @@ func (wh *WebSocketHub) sendTask() {
 	}
 }
 
-func sendLog(conn *websocket.Conn, content string) {
-	logItem := ws.NewLogMessage(content)
-	conn.WriteJSON(logItem)
+func sendLog(client *Client) {
+	logItem := ws.NewLogMessage("Connected successfully")
+	client.mu.Lock()
+	client.conn.WriteJSON(logItem)
+	client.mu.Unlock()
 }
 
 func (wh *WebSocketHub) Broadcast(message []byte) {
@@ -297,6 +304,7 @@ func (wh *WebSocketHub) SendToClient(id string, message []byte) {
 		wh.clientsMu.Lock()
 		delete(wh.clients, id)
 		wh.clientsMu.Unlock()
+		interactive.RequestInterrupt(id)
 	}
 }
 

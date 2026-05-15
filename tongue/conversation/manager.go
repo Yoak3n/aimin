@@ -117,8 +117,8 @@ func (m *Manager) executeConversation(data Input) {
 	}
 	m.mu.Unlock()
 
-	roundID, _, _ := interactive.BeginInterruptibleRound(from)
-	_, err := c.agent.Ask(q)
+	roundID, roundCtx, _ := interactive.BeginInterruptibleRound(from)
+	_, err := c.agent.Ask(roundCtx, q)
 	interactive.EndInterruptibleRound(from, roundID)
 	if err == nil {
 		return
@@ -160,7 +160,8 @@ func (m *Manager) AskDirect(conversationId string, from string, question string)
 	}
 	m.mu.Unlock()
 
-	_, err := c.agent.Ask(q)
+	ctx := interactive.InterruptContext(from)
+	_, err := c.agent.Ask(ctx, q)
 	return err
 }
 

@@ -1,6 +1,7 @@
 package interactive
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
@@ -39,7 +40,7 @@ func ExploreRun(question string, answer string, strategy string) (string, error,
 		Role:    schema.OpenAIMessageRoleUser,
 		Content: fmt.Sprintf("<observation>%s</observation>", answer),
 	})
-	result, err := a.RunWithMessages(msgs)
+	result, err := a.RunWithMessages(context.Background(), msgs)
 	if err != nil {
 		return "", err, nil
 	}

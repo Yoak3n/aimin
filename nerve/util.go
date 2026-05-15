@@ -1,7 +1,6 @@
 package nerve
 
 import (
-	"encoding/json"
 	"strings"
 
 	"github.com/Yoak3n/aimin/blood/schema"
@@ -45,18 +44,8 @@ func extractQuestion(content string) string {
 }
 
 func extractThought(m schema.OpenAIMessage) string {
-	if len(m.Reasoning) > 0 {
-		var s string
-		if err := json.Unmarshal(m.Reasoning, &s); err == nil {
-			s = strings.TrimSpace(s)
-			if s != "" {
-				return s
-			}
-		}
-		raw := strings.TrimSpace(string(m.Reasoning))
-		if raw != "" && raw != "null" {
-			return raw
-		}
+	if s := strings.TrimSpace(m.Reasoning); s != "" && s != "null" {
+		return s
 	}
 	return strings.TrimSpace(m.Content)
 }

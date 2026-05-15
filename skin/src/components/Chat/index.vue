@@ -12,68 +12,17 @@
       <button class="chat__btn" type="button" @click="reconnect" :disabled="appStore.isConnected">
         Reconnect
       </button>
-
     </div>
 
     <div ref="listEl" class="chat__list">
-      <div v-for="m in messages" :key="m.id" class="chat__msg" :data-role="m.role">
-        <div class="chat__meta">
-          <span class="chat__role">{{ m.role }}</span>
-          <span class="chat__time">{{ formatTime(m.time) }}</span>
-        </div>
-        <div class="chat__content">
-          <template v-if="m.role === 'agent' && (m.thought || m.toolCalls?.length || m.finalAnswer)">
-            <div v-if="m.thought" class="chat__section chat__section--thought">
-              <div class="chat__section-title">Thought</div>
-              <div class="chat__section-body">{{ m.thought }}</div>
-            </div>
-            <div v-if="m.toolCalls?.length" class="chat__section chat__section--thought">
-              <div class="chat__section-title">Tool Calls</div>
-              <div class="chat__section-body">
-                <div v-for="(tc, idx) in m.toolCalls" :key="`${m.id}_tc_${idx}`" class="chat__toolcall">
-                  <div class="chat__toolcall-name">{{ tc.name }}</div>
-                  <div class="chat__toolcall-args">{{ tc.arguments }}</div>
-                  <details v-if="tc.id && getToolResultForCall(m, tc.id)" class="chat__toolcall-result">
-                    <summary class="chat__toolcall-summary">
-                      {{ getToolResultForCall(m, tc.id)?.hasError ? "Result (error)" : "Result" }}
-                    </summary>
-                    <div class="chat__toolcall-result-body">
-                      <div v-if="getToolResultForCall(m, tc.id)?.action" class="chat__toolcall-result-meta">
-                        {{ getToolResultForCall(m, tc.id)?.action }}
-                      </div>
-                      <div v-if="getToolResultForCall(m, tc.id)?.hasError" class="chat__toolcall-result-error">
-                        {{ getToolResultForCall(m, tc.id)?.error }}
-                      </div>
-                      <div class="chat__toolcall-result-text">{{ getToolResultForCall(m, tc.id)?.result }}</div>
-                    </div>
-                  </details>
-                </div>
-              </div>
-            </div>
-            <div v-if="m.content && (!m.finalAnswer || m.content.trim() !== m.finalAnswer.trim())" class="chat__section chat__section--response">
-              <div class="chat__section-title">Response</div>
-              <div class="chat__section-body">{{ m.content }}</div>
-            </div>
-            <div v-if="m.finalAnswer" class="chat__section chat__section--answer">
-              <div class="chat__section-title">Answer</div>
-              <div class="chat__section-body">{{ m.finalAnswer }}</div>
-            </div>
-          </template>
-          <template v-else>
-            <span>{{ m.content }}</span>
-            <button
-              v-if="m.audio"
-              class="chat__audio-btn"
-              :class="{ 'chat__audio-btn--playing': playingId === m.id }"
-              type="button"
-              :disabled="playingId === m.id"
-              @click.stop="onPlayAudio(m)"
-            >
-              {{ playingId === m.id ? "播放中..." : "播放语音" }}
-            </button>
-          </template>
-        </div>
-      </div>
+      <ChatMessage
+        v-for="m in messages"
+        :key="m.id"
+        :message="m"
+        :playing-id="playingId"
+        :paused-id="pausedId"
+        @toggle-audio="onToggleAudio"
+      />
     </div>
 
     <form class="chat__composer" @submit.prevent="send">
@@ -93,51 +42,28 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useAppStore } from "@/store/module/app";
 import type { WsIncomingMessage, WsReplyMessage, WsReplyMessageData, WsToolResultMessage, WsToolResultMessageData, WsAudioMessage, WsAudioMessageData } from "@/types/ws";
+import type { ChatMessage as ChatMessageType, ToolCallItem, ToolResultItem } from "./types";
+import ChatMessage from "./ChatMessage.vue";
+import { scanJsonObject } from "./utils";
 
 const props = defineProps<{
   managed?: boolean;
 }>();
-
-type ChatRole = "user" | "agent" | "system";
-
-type ToolCallItem = {
-  id?: string;
-  name: string;
-  arguments: string;
-};
-
-type ToolResultItem = {
-  toolCallId: string;
-  action: string;
-  result: string;
-  error?: string;
-  hasError: boolean;
-};
-
-interface ChatMessage {
-  id: string;
-  role: ChatRole;
-  content: string;
-  time: number;
-  taskId?: string;
-  streaming?: boolean;
-  thought?: string;
-  finalAnswer?: string;
-  toolCalls?: ToolCallItem[];
-  toolResults?: ToolResultItem[];
-  audio?: { base64: string; format: string; voice: string; bytes: number };
-}
 
 const appStore = useAppStore();
 
 const listEl = ref<HTMLElement | null>(null);
 const draft = ref("");
 const isSending = ref(false);
-const messages = ref<ChatMessage[]>([]);
+const messages = ref<ChatMessageType[]>([]);
 const playingId = ref<string | null>(null);
+const playingAudio = ref<HTMLAudioElement | null>(null);
+const playingSource = ref<AudioBufferSourceNode | null>(null);
+const playingCtx = ref<AudioContext | null>(null);
 
 const taskToMessageId = new Map<string, string>();
 const taskToRaw = new Map<string, string>();
+const taskToReasoningRaw = new Map<string, string>();
 const taskToToolResults = new Map<string, ToolResultItem[]>();
 
 function now() {
@@ -148,15 +74,15 @@ function makeId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2)}_${now()}`;
 }
 
-function pushMessage(partial: Omit<ChatMessage, "id" | "time"> & Partial<Pick<ChatMessage, "id" | "time">>) {
-  const message: ChatMessage = {
+function pushMessage(partial: Omit<ChatMessageType, "id" | "time"> & Partial<Pick<ChatMessageType, "id" | "time">>) {
+  const message: ChatMessageType = {
     id: partial.id ?? makeId(partial.role),
     time: partial.time ?? now(),
     role: partial.role,
     content: partial.content,
     taskId: partial.taskId,
     streaming: partial.streaming,
-    thought: partial.thought,
+    reasoning: partial.reasoning,
     finalAnswer: partial.finalAnswer,
     toolCalls: partial.toolCalls,
     toolResults: partial.toolResults,
@@ -172,7 +98,7 @@ function findMessageById(id: string) {
 
 function upsertAgentStructuredReply(
   taskId: string,
-  parsed: { toolCalls: ToolCallItem[]; thought?: string; finalAnswer?: string; content: string },
+  parsed: { toolCalls: ToolCallItem[]; reasoning?: string; finalAnswer?: string; content: string },
   streaming: boolean
 ) {
   const existingId = taskToMessageId.get(taskId);
@@ -180,7 +106,7 @@ function upsertAgentStructuredReply(
     const created = pushMessage({
       role: "agent",
       content: parsed.content,
-      thought: parsed.thought,
+      reasoning: parsed.reasoning,
       finalAnswer: parsed.finalAnswer,
       toolCalls: parsed.toolCalls,
       toolResults: taskToToolResults.get(taskId) ?? [],
@@ -197,7 +123,7 @@ function upsertAgentStructuredReply(
     const created = pushMessage({
       role: "agent",
       content: parsed.content,
-      thought: parsed.thought,
+      reasoning: parsed.reasoning,
       finalAnswer: parsed.finalAnswer,
       toolCalls: parsed.toolCalls,
       toolResults: taskToToolResults.get(taskId) ?? [],
@@ -209,80 +135,11 @@ function upsertAgentStructuredReply(
   }
 
   target.content = parsed.content;
-  if (typeof parsed.thought === "string") target.thought = parsed.thought;
+  if (typeof parsed.reasoning === "string") target.reasoning = parsed.reasoning;
   if (typeof parsed.finalAnswer === "string") target.finalAnswer = parsed.finalAnswer;
   if (Array.isArray(parsed.toolCalls)) target.toolCalls = parsed.toolCalls;
   target.toolResults = taskToToolResults.get(taskId) ?? target.toolResults;
   target.streaming = streaming;
-}
-
-function extractXmlTagContent(raw: string, tag: string) {
-  const open = `<${tag}>`;
-  const close = `</${tag}>`;
-  const start = raw.indexOf(open);
-  if (start === -1) return null;
-  const contentStart = start + open.length;
-  const end = raw.indexOf(close, contentStart);
-  if (end === -1) return raw.slice(contentStart);
-  return raw.slice(contentStart, end);
-}
-
-function stripXmlTagBlock(raw: string, tag: string) {
-  const open = `<${tag}>`;
-  const close = `</${tag}>`;
-  while (true) {
-    const start = raw.indexOf(open);
-    if (start === -1) break;
-    const contentStart = start + open.length;
-    const end = raw.indexOf(close, contentStart);
-    if (end === -1) {
-      raw = raw.slice(0, start);
-      break;
-    }
-    raw = raw.slice(0, start) + raw.slice(end + close.length);
-  }
-  return raw;
-}
-
-function scanJsonObject(source: string, start: number) {
-  if (start < 0 || start >= source.length) return null;
-  if (source[start] !== "{") return null;
-  let depth = 0;
-  let inString = false;
-  let escape = false;
-  for (let i = start; i < source.length; i++) {
-    const ch = source[i];
-    if (inString) {
-      if (escape) {
-        escape = false;
-        continue;
-      }
-      if (ch === "\\") {
-        escape = true;
-        continue;
-      }
-      if (ch === '"') {
-        inString = false;
-      }
-      continue;
-    }
-    if (ch === '"') {
-      inString = true;
-      continue;
-    }
-    if (ch === "{") {
-      depth++;
-      continue;
-    }
-    if (ch === "}") {
-      depth--;
-      if (depth === 0) {
-        const end = i + 1;
-        return { json: source.slice(start, end), end };
-      }
-    }
-  }
-  return null;
 }
 
 function parseAgentTextWithToolCalls(raw: string) {
@@ -354,13 +211,9 @@ function parseAgentTextWithToolCalls(raw: string) {
 }
 
 function parseAgentRaw(raw: string) {
-  const thought = extractXmlTagContent(raw, "thought")?.trim() || undefined;
-  let cleaned = stripXmlTagBlock(raw, "thought");
-  cleaned = stripXmlTagBlock(cleaned, "final_answer");
-  const parsed = parseAgentTextWithToolCalls(cleaned);
+  const parsed = parseAgentTextWithToolCalls(raw);
   return {
     content: parsed.content,
-    thought,
     toolCalls: parsed.toolCalls,
   };
 }
@@ -368,10 +221,21 @@ function parseAgentRaw(raw: string) {
 function handleReply(data: WsReplyMessageData) {
   if (data.status === 0 && data.chunk) {
     const prev = taskToRaw.get(data.task_id) ?? "";
-    const nextRaw = prev + data.chunk.content;
-    taskToRaw.set(data.task_id, nextRaw);
-    const parsed = parseAgentRaw(nextRaw);
-    upsertAgentStructuredReply(data.task_id, { ...parsed, finalAnswer: undefined }, true);
+    const cot = prev + data.chunk.content;
+    taskToRaw.set(data.task_id, cot);
+    const prevReasoning = taskToReasoningRaw.get(data.task_id) ?? "";
+    const nextReasoning = prevReasoning + String(data.chunk.reasoning_content ?? "");
+    taskToReasoningRaw.set(data.task_id, nextReasoning);
+    const parsed = parseAgentRaw(cot);
+    upsertAgentStructuredReply(
+      data.task_id,
+      {
+        content: parsed.content,
+        toolCalls: parsed.toolCalls,
+        reasoning: nextReasoning.trim() || undefined,
+      },
+      true
+    );
     return;
   }
 
@@ -379,30 +243,17 @@ function handleReply(data: WsReplyMessageData) {
     const prevRaw = taskToRaw.get(data.task_id) ?? "";
     const parsedPrev = parseAgentRaw(prevRaw);
     taskToRaw.set(data.task_id, prevRaw ? `${prevRaw}${data.result.content}` : data.result.content);
+    const reasoning = (taskToReasoningRaw.get(data.task_id) ?? "").trim() || undefined;
     const finalText = String(data.result.content ?? "").trim();
     const prevText = String(parsedPrev.content ?? "").trim();
-    const shouldSplit = Boolean(parsedPrev.thought) || (parsedPrev.toolCalls?.length ?? 0) > 0;
 
-    if (!shouldSplit || prevText === finalText) {
-      upsertAgentStructuredReply(
-        data.task_id,
-        {
-          content: finalText,
-          toolCalls: parsedPrev.toolCalls,
-          thought: parsedPrev.thought,
-          finalAnswer: undefined,
-        },
-        false
-      );
-      return;
-    }
     upsertAgentStructuredReply(
       data.task_id,
       {
-        content: parsedPrev.content,
+        content: prevText || finalText,
         toolCalls: parsedPrev.toolCalls,
-        thought: parsedPrev.thought,
-        finalAnswer: finalText,
+        reasoning,
+        finalAnswer: finalText && finalText !== prevText ? finalText : undefined,
       },
       false
     );
@@ -458,8 +309,26 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
+function stopCurrentAudio() {
+  if (playingAudio.value) {
+    playingAudio.value.pause();
+    playingAudio.value = null;
+  }
+  if (playingSource.value) {
+    try { playingSource.value.stop(); } catch {}
+    playingSource.value = null;
+  }
+  if (playingCtx.value) {
+    playingCtx.value.close();
+    playingCtx.value = null;
+  }
+  playingId.value = null;
+}
+
 function playAudioBase64(audioBase64: string, format: string, msgId?: string) {
   try {
+    stopCurrentAudio();
+
     if (format === "pcm16") {
       const pcmBuffer = base64ToArrayBuffer(audioBase64);
       const pcmData = new Int16Array(pcmBuffer);
@@ -474,10 +343,18 @@ function playAudioBase64(audioBase64: string, format: string, msgId?: string) {
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(ctx.destination);
-      if (msgId) playingId.value = msgId;
       source.start();
+
+      playingCtx.value = ctx;
+      playingSource.value = source;
+      if (msgId) playingId.value = msgId;
+
       source.onended = () => {
         ctx.close();
+        if (playingSource.value === source) {
+          playingSource.value = null;
+          playingCtx.value = null;
+        }
         if (playingId.value === msgId) playingId.value = null;
       };
     } else {
@@ -485,25 +362,61 @@ function playAudioBase64(audioBase64: string, format: string, msgId?: string) {
       const blob = new Blob([audioBuffer], { type: `audio/${format}` });
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
+
+      playingAudio.value = audio;
       if (msgId) playingId.value = msgId;
+
       audio.onended = () => {
         URL.revokeObjectURL(url);
+        if (playingAudio.value === audio) playingAudio.value = null;
         if (playingId.value === msgId) playingId.value = null;
       };
       audio.onerror = () => {
         URL.revokeObjectURL(url);
+        if (playingAudio.value === audio) playingAudio.value = null;
         if (playingId.value === msgId) playingId.value = null;
       };
       audio.play();
     }
   } catch (e) {
     console.error("Audio playback error:", e);
-    playingId.value = null;
+    stopCurrentAudio();
   }
 }
 
-function onPlayAudio(m: ChatMessage) {
+function pauseCurrentAudio() {
+  if (playingAudio.value) {
+    playingAudio.value.pause();
+  } else if (playingCtx.value && playingCtx.value.state === "running") {
+    playingCtx.value.suspend();
+  }
+}
+
+function resumeCurrentAudio() {
+  if (playingAudio.value) {
+    playingAudio.value.play();
+  } else if (playingCtx.value && playingCtx.value.state === "suspended") {
+    playingCtx.value.resume();
+  }
+}
+
+const pausedId = ref<string | null>(null);
+
+function onToggleAudio(m: ChatMessageType) {
   if (!m.audio) return;
+
+  if (playingId.value === m.id) {
+    if (pausedId.value === m.id) {
+      resumeCurrentAudio();
+      pausedId.value = null;
+    } else {
+      pauseCurrentAudio();
+      pausedId.value = m.id;
+    }
+    return;
+  }
+
+  pausedId.value = null;
   playAudioBase64(m.audio.base64, m.audio.format, m.id);
 }
 
@@ -556,12 +469,6 @@ function handleIncoming(message: WsIncomingMessage) {
   }
 }
 
-function getToolResultForCall(message: ChatMessage, toolCallId: string) {
-  if (!toolCallId) return null;
-  const list = message.toolResults ?? [];
-  return list.find((x) => x.toolCallId === toolCallId) ?? null;
-}
-
 function receiveWsMessage(message: WsIncomingMessage) {
   handleIncoming(message);
 }
@@ -599,11 +506,6 @@ async function send() {
   }
 }
 
-function formatTime(ts: number) {
-  const d = new Date(ts);
-  return d.toLocaleTimeString();
-}
-
 let unsubscribe: null | (() => void) = null;
 
 onMounted(() => {
@@ -618,6 +520,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  stopCurrentAudio();
   unsubscribe?.();
   unsubscribe = null;
 });
@@ -706,36 +609,6 @@ watch(
   background: #fff;
 }
 
-.chat__msg {
-  max-width: 85%;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: #f6f6f6;
-  color: #111;
-  align-self: flex-start;
-  word-break: break-word;
-  white-space: pre-wrap;
-}
-
-.chat__msg[data-role="user"] {
-  background: #e7f1ff;
-  align-self: flex-end;
-}
-
-.chat__msg[data-role="system"] {
-  background: #faf1e5;
-  align-self: center;
-  max-width: 95%;
-}
-
-.chat__meta {
-  display: flex;
-  gap: 8px;
-  font-size: 11px;
-  opacity: 0.8;
-  margin-bottom: 4px;
-}
-
 .chat__composer {
   display: flex;
   gap: 10px;
@@ -764,160 +637,5 @@ watch(
 .chat__btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-.chat__section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.chat__section+.chat__section {
-  margin-top: 10px;
-}
-
-.chat__section-title {
-  font-size: 11px;
-  opacity: 0.75;
-  letter-spacing: 0.2px;
-  text-transform: uppercase;
-}
-
-.chat__section-body {
-  white-space: pre-wrap;
-}
-
-.chat__section--thought {
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px dashed #d6d6d6;
-  background: #fbfbfb;
-  color: #444;
-}
-
-.chat__section--thought .chat__section-body {
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.chat__section--answer {
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid #d7e6ff;
-  background: #f4f9ff;
-  color: #111;
-}
-
-.chat__section--response {
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px dashed #e2e2e2;
-  background: #fafafa;
-  color: #333;
-}
-
-.chat__section--response .chat__section-body {
-  font-size: 13px;
-  line-height: 1.55;
-  font-weight: 400;
-}
-
-.chat__section--answer .chat__section-body {
-  font-size: 14px;
-  line-height: 1.55;
-  font-weight: 600;
-}
-
-.chat__toolcall {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid #eee;
-  background: #fff;
-}
-
-.chat__toolcall+.chat__toolcall {
-  margin-top: 10px;
-}
-
-.chat__toolcall-name {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 12px;
-  opacity: 0.9;
-}
-
-.chat__toolcall-args {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 12px;
-  opacity: 0.85;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.chat__toolcall-result {
-  margin-top: 6px;
-}
-
-.chat__toolcall-summary {
-  cursor: pointer;
-  font-size: 12px;
-  opacity: 0.9;
-}
-
-.chat__toolcall-result-body {
-  margin-top: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.chat__toolcall-result-meta {
-  font-size: 12px;
-  opacity: 0.9;
-}
-
-.chat__toolcall-result-error {
-  font-size: 12px;
-  color: #c41c1c;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.chat__toolcall-result-text {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 12px;
-  opacity: 0.9;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.chat__audio-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 8px;
-  padding: 6px 14px;
-  border: none;
-  border-radius: 999px;
-  background: #4f8df5;
-  color: #fff;
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.chat__audio-btn:hover:not(:disabled) {
-  background: #3b72d9;
-}
-
-.chat__audio-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.chat__audio-btn--playing {
-  background: #999;
 }
 </style>

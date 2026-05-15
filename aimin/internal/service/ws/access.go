@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/Yoak3n/aimin/blood/schema/ws"
+	"github.com/Yoak3n/aimin/hand/interactive"
 )
 
 func (wh *WebSocketHub) registerClient(client *Client) {
@@ -24,6 +25,7 @@ func (wh *WebSocketHub) unregisterClient(id string) {
 	clientCount := len(wh.clients)
 	wh.clientsMu.Unlock()
 	if ok {
+		interactive.RequestInterrupt(id)
 		cl := ws.WebsocketMessage{
 			Action: ws.CloseMessage,
 			Data:   ws.CloseMessage,

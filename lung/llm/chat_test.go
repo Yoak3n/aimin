@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"context"
 	"testing"
 
 	"github.com/Yoak3n/aimin/blood/schema"
@@ -27,7 +28,7 @@ type fakeStreamChatter struct {
 	err         error
 }
 
-func (f *fakeStreamChatter) ChatStream(userMessages []schema.OpenAIMessage, tools []schema.OpenAITool, _ func(string) error, systemPrompt ...string) (schema.OpenAIMessage, error) {
+func (f *fakeStreamChatter) ChatStream(_ context.Context, userMessages []schema.OpenAIMessage, tools []schema.OpenAITool, _ func(string, string) error, systemPrompt ...string) (schema.OpenAIMessage, error) {
 	f.gotMessages = append([]schema.OpenAIMessage(nil), userMessages...)
 	f.gotTools = append([]schema.OpenAITool(nil), tools...)
 	f.gotSystem = append([]string(nil), systemPrompt...)
@@ -52,7 +53,7 @@ func TestChatWith_PassesArgs(t *testing.T) {
 func TestChatStreamWith_PassesArgs(t *testing.T) {
 	c := &fakeStreamChatter{out: "ok"}
 	msgs := []schema.OpenAIMessage{{Role: schema.OpenAIMessageRoleUser, Content: "hi"}}
-	got, err := ChatStreamWith(c, msgs, nil, nil, "sys")
+	got, err := ChatStreamWith(context.Background(), c, msgs, nil, nil, "sys")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -63,4 +64,3 @@ func TestChatStreamWith_PassesArgs(t *testing.T) {
 		t.Fatalf("unexpected args: system=%#v messages=%#v", c.gotSystem, c.gotMessages)
 	}
 }
-

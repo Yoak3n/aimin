@@ -39,7 +39,10 @@ func (wh *WebSocketHub) handle() {
 			wh.clientsMu.RUnlock()
 			for i, client := range clients {
 				k := ids[i]
-				if err := client.conn.WriteMessage(websocket.TextMessage, message); err != nil {
+				client.mu.Lock()
+				err := client.conn.WriteMessage(websocket.TextMessage, message)
+				client.mu.Unlock()
+				if err != nil {
 					client.conn.Close()
 					wh.clientsMu.Lock()
 					delete(wh.clients, k)

@@ -1,15 +1,16 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/Yoak3n/aimin/blood/pkg/logger"
-	"github.com/Yoak3n/aimin/bone/workspace"
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
+	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/blood/schema"
+	"github.com/Yoak3n/aimin/bone/workspace"
 )
 
 type ConversationAgent struct {
@@ -56,8 +57,9 @@ func NewConversationAgent(base *ReActAgent) *ConversationAgent {
 		})
 		if a != "" {
 			messages = append(messages, schema.OpenAIMessage{
-				Role:    schema.OpenAIMessageRoleAssistant,
-				Content: formatCompactAssistant("", a),
+				Role:      schema.OpenAIMessageRoleAssistant,
+				Reasoning: strings.TrimSpace(rec.Thoughts),
+				Content:   a,
 			})
 		}
 	}
@@ -73,7 +75,10 @@ func (c *ConversationAgent) SetMaxTurns(maxTurns int) {
 	c.trimToMaxTurns()
 }
 
-func (c *ConversationAgent) Ask(question string) (ConversationTurn, error) {
+func (c *ConversationAgent) Ask(ctx context.Context, question string) (ConversationTurn, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	question = strings.TrimSpace(question)
 	if question == "" {
 		return ConversationTurn{}, fmt.Errorf("question 不能为空")
@@ -90,11 +95,10 @@ func (c *ConversationAgent) Ask(question string) (ConversationTurn, error) {
 	replacedHooks := false
 	if origHooks == nil || origHooks.IsEmpty() {
 		h := NewAgentHooks()
-		h.AddFinalAnswerHandler(func(string, []schema.OpenAIMessage, string) {})
 		c.Base.SetHooks(h)
 		replacedHooks = true
 	}
-	res, err := c.Base.RunWithMessages(runMessages)
+	res, err := c.Base.RunWithMessages(ctx, runMessages)
 	if replacedHooks {
 		c.Base.SetHooks(origHooks)
 	}
@@ -104,11 +108,12 @@ func (c *ConversationAgent) Ask(question string) (ConversationTurn, error) {
 
 	c.Messages = append(c.Messages, schema.OpenAIMessage{
 		Role:    schema.OpenAIMessageRoleUser,
-		Content: fmt.Sprintf("<question>%s</question>", question),
+		Content: question,
 	})
 	c.Messages = append(c.Messages, schema.OpenAIMessage{
-		Role:    schema.OpenAIMessageRoleAssistant,
-		Content: formatCompactAssistant(res.Thought, res.FinalAnswer),
+		Role:      schema.OpenAIMessageRoleAssistant,
+		Reasoning: res.Thought,
+		Content:   res.FinalAnswer,
 	})
 	c.trimToMaxTurns()
 
@@ -130,17 +135,6 @@ func (c *ConversationAgent) trimToMaxTurns() {
 	c.Messages = append([]schema.OpenAIMessage(nil), c.Messages[len(c.Messages)-maxMessages:]...)
 
 	c.maybeSilentFlushDailyMemory(dropped, maxMessages)
-}
-
-func formatCompactAssistant(_ string, finalAnswer string) string {
-	finalAnswer = strings.TrimSpace(finalAnswer)
-	if finalAnswer == "" {
-		return ""
-	}
-	if extracted := helper.ExtractContentByTag(finalAnswer, "final_answer"); strings.TrimSpace(extracted) != "" {
-		finalAnswer = strings.TrimSpace(extracted)
-	}
-	return finalAnswer
 }
 
 func (c *ConversationAgent) maybeSilentFlushDailyMemory(dropped []schema.OpenAIMessage, keepMessages int) {
@@ -183,7 +177,7 @@ func (c *ConversationAgent) maybeSilentFlushDailyMemory(dropped []schema.OpenAIM
 		h := NewAgentHooks()
 		h.AddFinalAnswerHandler(func(string, []schema.OpenAIMessage, string) {})
 		c.Base.SetHooks(h)
-		_, _ = c.Base.RunWithMessages([]schema.OpenAIMessage{
+		_, _ = c.Base.RunWithMessages(context.Background(), []schema.OpenAIMessage{
 			{
 				Role:    schema.OpenAIMessageRoleUser,
 				Content: input,

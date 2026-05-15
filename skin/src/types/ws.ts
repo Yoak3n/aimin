@@ -60,6 +60,7 @@ export type WsReplyStatus = 0 | 1;
 export interface WsReplyChunkData {
   task_id: string;
   chunk_idx: number;
+  reasoning_content?: string;
   content: string;
 }
 
