@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yoak3n/aimin/blood/agent/skill"
+	"github.com/Yoak3n/aimin/bone/skill"
 	"github.com/Yoak3n/aimin/blood/config"
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/pkg/util"

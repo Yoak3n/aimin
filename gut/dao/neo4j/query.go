@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Yoak3n/aimin/blood/dao/graph"
+	"github.com/Yoak3n/aimin/gut/dao/graph"
 	"github.com/Yoak3n/aimin/blood/schema"
 	"github.com/neo4j/neo4j-go-driver/v6/neo4j"
 )

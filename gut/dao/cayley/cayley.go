@@ -12,7 +12,7 @@ import (
 	"sync"
 
 	"github.com/Yoak3n/aimin/blood/config"
-	"github.com/Yoak3n/aimin/blood/dao/graph"
+	"github.com/Yoak3n/aimin/gut/dao/graph"
 	"github.com/Yoak3n/aimin/blood/schema"
 	"github.com/cayleygraph/cayley"
 	cgraph "github.com/cayleygraph/cayley/graph"

@@ -1,7 +1,7 @@
 package mcp
 
 import (
-	"github.com/Yoak3n/aimin/blood/agent/mcp/tool"
+	"github.com/Yoak3n/aimin/bone/mcp/tool"
 )
 
 func ShellCommandTool() *Tool {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Yoak3n/aimin/blood/agent/mcp/tool"
+	"github.com/Yoak3n/aimin/bone/mcp/tool"
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/hand/sandbox"

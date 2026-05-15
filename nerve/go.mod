@@ -3,7 +3,6 @@ module github.com/Yoak3n/aimin/nerve
 go 1.25.3
 
 require (
-	github.com/Yoak3n/aimin/blood v0.0.0-20260115184206-3de94c103cc3
 	github.com/tidwall/gjson v1.18.0
 )
 

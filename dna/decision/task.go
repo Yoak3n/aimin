@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Yoak3n/aimin/blood/agent"
 	schemaws "github.com/Yoak3n/aimin/blood/schema/ws"
+	"github.com/Yoak3n/aimin/cerebrum/agent"
 	"github.com/Yoak3n/aimin/dna/fsm"
 	"github.com/Yoak3n/aimin/hand/interactive"
 )

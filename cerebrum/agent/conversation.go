@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Yoak3n/aimin/blood/agent/workspace"
-	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
+	"github.com/Yoak3n/aimin/bone/workspace"
+	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/schema"
 )
 

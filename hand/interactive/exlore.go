@@ -3,10 +3,10 @@ package interactive
 import (
 	"fmt"
 
-	"github.com/Yoak3n/aimin/blood/agent"
-	"github.com/Yoak3n/aimin/blood/agent/workspace"
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
 	"github.com/Yoak3n/aimin/blood/schema"
+	"github.com/Yoak3n/aimin/bone/workspace"
+	"github.com/Yoak3n/aimin/cerebrum/agent"
 )
 
 // 当状态机通过网络搜索或主动提问得到一个探索的粗略回答后

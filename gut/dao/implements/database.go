@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/Yoak3n/aimin/blood/config"
-	cayleydb "github.com/Yoak3n/aimin/blood/dao/cayley"
-	"github.com/Yoak3n/aimin/blood/dao/graph"
-	neo4j "github.com/Yoak3n/aimin/blood/dao/neo4j"
-	pg "github.com/Yoak3n/aimin/blood/dao/pg"
+	cayleydb "github.com/Yoak3n/aimin/gut/dao/cayley"
+	"github.com/Yoak3n/aimin/gut/dao/graph"
+	neo4j "github.com/Yoak3n/aimin/gut/dao/neo4j"
+	pg "github.com/Yoak3n/aimin/gut/dao/pg"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"

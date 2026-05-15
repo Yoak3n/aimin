@@ -45,8 +45,7 @@ require (
 
 require (
 	github.com/Yoak3n/aimin/blood v0.0.0-20260428134457-8d9e7e5c27d2
-	github.com/Yoak3n/aimin/face v0.0.0-20260115184206-3de94c103cc3 // indirect
-	github.com/Yoak3n/aimin/nerve v0.0.0-20260330172120-89b1d014e036
+	github.com/Yoak3n/aimin/nerve v0.0.0-20260330172120-89b1d014e036 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect

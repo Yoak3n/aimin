@@ -7,9 +7,9 @@ import (
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/pkg/util"
 	"github.com/Yoak3n/aimin/blood/schema"
-	"github.com/Yoak3n/aimin/blood/service/retrieval"
 	"github.com/Yoak3n/aimin/nerve/controller"
 	"github.com/Yoak3n/aimin/nerve/memory"
+	"github.com/Yoak3n/aimin/kidney/retrieval"
 )
 
 type Nerve struct {

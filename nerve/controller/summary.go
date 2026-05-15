@@ -10,10 +10,9 @@ import (
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/pkg/util"
 	"github.com/Yoak3n/aimin/blood/schema"
-	"github.com/Yoak3n/aimin/blood/service/llm"
+	"github.com/Yoak3n/aimin/lung/llm"
 	"github.com/tidwall/gjson"
 )
-
 
 const temporarySummaryConfidenceThreshold = 0.6
 

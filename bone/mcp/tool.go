@@ -3,7 +3,7 @@ package mcp
 import (
 	"fmt"
 
-	"github.com/Yoak3n/aimin/blood/agent/mcp/tool"
+	"github.com/Yoak3n/aimin/bone/mcp/tool"
 	"github.com/Yoak3n/aimin/blood/schema"
 )
 

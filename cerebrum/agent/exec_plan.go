@@ -1,7 +1,7 @@
 package agent
 
 import (
-	"github.com/Yoak3n/aimin/blood/agent/mcp"
+	"github.com/Yoak3n/aimin/bone/mcp"
 	"github.com/Yoak3n/aimin/blood/schema"
 )
 

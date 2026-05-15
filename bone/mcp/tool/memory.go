@@ -12,7 +12,7 @@ import (
 	"github.com/Yoak3n/aimin/blood/config"
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/schema"
-	"github.com/Yoak3n/aimin/blood/service/retrieval"
+	"github.com/Yoak3n/aimin/kidney/retrieval"
 )
 
 func ManageMemory(ctx *Context) string {

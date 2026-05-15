@@ -3,7 +3,7 @@ package llm
 import (
 	"fmt"
 
-	"github.com/Yoak3n/aimin/blood/adapter"
+	"github.com/Yoak3n/aimin/lung/adapter"
 	"github.com/Yoak3n/aimin/blood/config"
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/schema"

@@ -11,14 +11,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yoak3n/aimin/blood/agent/mcp"
-	"github.com/Yoak3n/aimin/blood/agent/skill"
-	"github.com/Yoak3n/aimin/blood/agent/workspace"
-	"github.com/Yoak3n/aimin/blood/config"
-	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/pkg/logger"
+	"github.com/Yoak3n/aimin/blood/config"
+	"github.com/Yoak3n/aimin/bone/mcp"
+	"github.com/Yoak3n/aimin/bone/skill"
+	"github.com/Yoak3n/aimin/bone/workspace"
+	"github.com/Yoak3n/aimin/lung/llm"
+	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/schema"
-	"github.com/Yoak3n/aimin/blood/service/llm"
 )
 
 type RunResult struct {

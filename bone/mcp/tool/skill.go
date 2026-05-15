@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Yoak3n/aimin/blood/agent/skill"
+	"github.com/Yoak3n/aimin/bone/skill"
 )
 
 func ComplexTaskForSkill(ctx *Context) string {

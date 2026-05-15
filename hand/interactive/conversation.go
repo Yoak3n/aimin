@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Yoak3n/aimin/blood/agent"
-	"github.com/Yoak3n/aimin/blood/agent/workspace"
 	"github.com/Yoak3n/aimin/blood/schema"
 	schemaws "github.com/Yoak3n/aimin/blood/schema/ws"
+	"github.com/Yoak3n/aimin/bone/workspace"
+	"github.com/Yoak3n/aimin/cerebrum/agent"
 	"github.com/Yoak3n/aimin/nerve"
 )
 
