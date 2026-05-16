@@ -10,4 +10,5 @@ chat.json
 skills/
 config.json
 *.yaml
+.deepseek/
 default_workspace/

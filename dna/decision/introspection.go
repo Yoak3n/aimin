@@ -15,9 +15,9 @@ func NewIntrospectionNode(check func(ctx *fsm.Context) bool) *fsm.WorkState {
 
 func makeIntrospectionAction() fsm.WorkAction {
 	return func(ctx *fsm.Context) string {
-		ctx.Attr.AddEnergy(-1)
-		ctx.Attr.AddCuriosity(-2)
-		ctx.Attr.AddOpenness(1)
+		ctx.Attr.AddEnergy(-3)
+		ctx.Attr.AddCuriosity(2)
+		ctx.Attr.AddOpenness(-5)
 		logger.Logger.Println("Introspection Action")
 		time.Sleep(time.Second)
 		return fsm.Done

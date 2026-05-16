@@ -39,7 +39,7 @@ func makeExploreAction() fsm.WorkAction {
 	var chosenDegree int64
 	chosenStrategy := ExploreStrategyWebSearch
 	return func(ctx *fsm.Context) string {
-		ctx.Attr.AddEnergy(-2)
+		ctx.Attr.AddEnergy(-5)
 		shouldInterrupt := func() bool {
 			return ctx != nil && ctx.HasPendingTask()
 		}
@@ -90,10 +90,7 @@ func makeExploreAction() fsm.WorkAction {
 						return fsm.Interrupt
 					}
 				}
-
 				progress = 3
-				continue
-
 			case 3:
 				handleExploreAnswer(chosenStrategy, question, answer, chosenType, chosenName)
 				if ctx != nil && ctx.Persist != nil {
@@ -107,6 +104,9 @@ func makeExploreAction() fsm.WorkAction {
 					})
 				}
 				progress = 1
+				logger.Logger.Println("Explore Done")
+				ctx.Attr.AddOpenness(5)
+				ctx.Attr.AddCuriosity(-5)
 				return fsm.Done
 
 			default:

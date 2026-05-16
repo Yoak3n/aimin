@@ -211,10 +211,11 @@ func NewVirtualState(id, name string, children []string) *VirtualState {
 
 type CompositeState struct {
 	BaseState
-	children  []State
-	current   int
-	RouterKey string
-	selector  func(*Context, []State) int
+	children     []State
+	current      int
+	childEntered bool
+	RouterKey    string
+	selector     func(*Context, []State) int
 }
 
 func (c *CompositeState) Children() []State {
@@ -245,8 +246,8 @@ func (c *CompositeState) SetSelect(s func(*Context, []State) int) {
 
 func (c *CompositeState) OnEnter(ctx *Context) {
 	c.BaseState.OnEnter(ctx)
+	c.childEntered = false
 	start := 0
-	// 外部选择children,返回索引，实际是操作routerKey
 	if c.selector != nil {
 		idx := c.selector(ctx, c.children)
 		if idx >= 0 && idx < len(c.children) {
@@ -254,16 +255,6 @@ func (c *CompositeState) OnEnter(ctx *Context) {
 		}
 	}
 	c.current = start
-	// if len(c.children) > 0 {
-	// 	child := c.children[c.current]
-	// 	if ctx.OnStateChange != nil {
-	// 		ctx.OnStateChange(child.Name())
-	// 	}
-	// 	// else {
-	// 	// 	//child = c.children[0]
-	// 	// 	// 应该会直接返回根节点
-	// 	// }
-	// }
 }
 
 func (c *CompositeState) OnUpdate(ctx *Context) string {
@@ -271,35 +262,36 @@ func (c *CompositeState) OnUpdate(ctx *Context) string {
 		return Done
 	}
 
-	// 如果当前子状态不可进入，尝试寻找下一个可进入的
-	if child := c.children[c.current]; child.CheckEntryCondition(ctx) {
-		// 切换了子状态，触发通知和 OnEnter
-		if ctx.OnStateChange != nil {
-			ctx.OnStateChange(child.Name())
-		}
-		child.OnEnter(ctx)
-	} else {
-		found := false
-		for idx := c.current + 1; idx < len(c.children); idx++ {
-			if c.children[idx].CheckEntryCondition(ctx) {
-				c.current = idx
-				found = true
-				break
+	child := c.children[c.current]
+
+	if !c.childEntered {
+		if child.CheckEntryCondition(ctx) {
+			if ctx.OnStateChange != nil {
+				ctx.OnStateChange(child.Name())
 			}
+			child.OnEnter(ctx)
+			c.childEntered = true
+		} else {
+			found := false
+			for idx := c.current + 1; idx < len(c.children); idx++ {
+				if c.children[idx].CheckEntryCondition(ctx) {
+					c.current = idx
+					found = true
+					break
+				}
+			}
+			if !found {
+				return Done
+			}
+			child = c.children[c.current]
+			if ctx.OnStateChange != nil {
+				ctx.OnStateChange(child.Name())
+			}
+			child.OnEnter(ctx)
+			c.childEntered = true
 		}
-		if !found {
-			return Done
-		}
-		// 切换了子状态，触发通知和 OnEnter
-		child := c.children[c.current]
-		if ctx.OnStateChange != nil {
-			ctx.OnStateChange(child.Name())
-		}
-		child.OnEnter(ctx)
 	}
 
-	child := c.children[c.current]
-	// 代理执行子状态
 	result := child.OnUpdate(ctx)
 	if result == Done {
 		child.OnExit(ctx)
@@ -307,24 +299,16 @@ func (c *CompositeState) OnUpdate(ctx *Context) string {
 			delete(ctx.Data, c.RouterKey)
 		}
 
-		// 尝试进入下一个子状态
+		c.childEntered = false
 		c.current++
-		if c.current < len(c.children) {
-			nextChild := c.children[c.current]
-			if ctx.OnStateChange != nil {
-				ctx.OnStateChange(nextChild.Name())
+		for c.current < len(c.children) {
+			if c.children[c.current].CheckEntryCondition(ctx) {
+				return ""
 			}
-			if nextChild.CheckEntryCondition(ctx) {
-				nextChild.OnEnter(ctx)
-			}
-			return "" // 继续在复合状态运行
+			c.current++
 		}
 		return Done
 	} else if result != "" {
-		// 子状态请求跳转？
-		// 在复合状态内部跳转比较复杂，这里假设子状态只能返回 DONE 或 空
-		// 如果子状态返回了具体的 ID，说明它想跳出复合状态，或者跳到复合状态内的其他节点
-		// 这里简化：如果子状态返回非空ID，且不是DONE，我们认为它要跳出整个复合状态
 		return result
 	}
 

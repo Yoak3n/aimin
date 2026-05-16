@@ -20,27 +20,49 @@ func NewSleepNode() *fsm.WorkState {
 func makeSleepNode() fsm.WorkAction {
 	progress := 1
 	return func(ctx *fsm.Context) string {
+		shouldInterrupt := func() bool {
+			return ctx != nil && ctx.HasPendingTask()
+		}
 		for i := progress; i < 6; i++ {
 			switch i {
 			case 1:
+				if shouldInterrupt() {
+					return fsm.Interrupt
+				}
 				time.Sleep(time.Second)
+				ctx.Attr.AddEnergy(2)
 				logger.Logger.Println("Sleep:", i)
 				progress++
 			case 2:
+				if shouldInterrupt() {
+					return fsm.Interrupt
+				}
 				time.Sleep(time.Second)
+				ctx.Attr.AddEnergy(2)
 				logger.Logger.Println("Sleep:", i)
 				progress++
 			case 3:
+				if shouldInterrupt() {
+					return fsm.Interrupt
+				}
 				time.Sleep(time.Second)
+				ctx.Attr.AddEnergy(2)
 				logger.Logger.Println("Sleep:", i)
 				progress++
 			case 4:
+				if shouldInterrupt() {
+					return fsm.Interrupt
+				}
 				time.Sleep(time.Second)
+				ctx.Attr.AddEnergy(2)
 				logger.Logger.Println("Sleep:", i)
 				progress++
 			case 5:
+				if shouldInterrupt() {
+					return fsm.Interrupt
+				}
 				time.Sleep(time.Second)
-				ctx.Attr.AddEnergy(10)
+				ctx.Attr.AddEnergy(2)
 				logger.Logger.Println("Sleep:", i)
 				progress = 1
 				return fsm.Done

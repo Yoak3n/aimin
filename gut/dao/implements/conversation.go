@@ -61,8 +61,10 @@ func (d *Database) GetReleventConversationRecords(embedding []float32, limit ...
 	embeddingStr := util.Float32SliceToString(embedding)
 
 	var conversationIds []string
-	res := db.Raw(`SELECT DISTINCT conversation_id FROM conversation_text_chunk 
-		ORDER BY embedding <-> $1::vector LIMIT $2`, embeddingStr, limit[0]).Scan(&conversationIds)
+	res := db.Raw(`SELECT DISTINCT conversation_id FROM (
+		SELECT conversation_id FROM conversation_text_chunk
+		ORDER BY embedding <-> $1::vector LIMIT $2
+	) AS nearest`, embeddingStr, limit[0]).Scan(&conversationIds)
 	if res.Error != nil {
 		return nil, res.Error
 	}

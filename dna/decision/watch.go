@@ -24,8 +24,8 @@ func makeWatchAction() fsm.WorkAction {
 			<-ticker.C
 		}
 		progress = 1
-		ctx.Attr.AddEnergy(-1)
-		ctx.Attr.AddCuriosity(-2)
+		ctx.Attr.AddEnergy(-4)
+		ctx.Attr.AddCuriosity(2)
 		ctx.Attr.AddOpenness(-3)
 		return fsm.Done
 	}

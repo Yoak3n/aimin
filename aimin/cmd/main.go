@@ -17,7 +17,7 @@ func init() {
 
 	logger.Init()
 	logger.SetExternalHandler(hub.BroadcastLog)
-	action.RemoteAsk = hub.Ask
+	action.RemoteAsk = hub.AskClient
 	interactive.WSReplyBroadcast = hub.SendToClient
 	decision.TaskExecutor = func(id, from, question string) error {
 		return conversation.GetManager().AskDirect(id, from, question)

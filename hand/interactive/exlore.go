@@ -26,19 +26,35 @@ func ExploreRun(question string, answer string, strategy string) (string, error,
 		Role:    schema.OpenAIMessageRoleUser,
 		Content: fmt.Sprintf("<question>agent提出的问题：%s</question>", question),
 	})
-	actionText := ""
+	actionName := "FileOperation"
+	args := ""
 	if strategy == "web_search" {
-		actionText = fmt.Sprintf("Web(search,query=\"%s\")", question)
+		actionName = "Web"
+		args = fmt.Sprintf("query=\"%s\"", question)
 	} else {
-		actionText = fmt.Sprintf("ask_user(\"%s\")", question)
+		actionName = "ask_user"
+		args = fmt.Sprintf("question=\"%s\"", question)
 	}
 	msgs = append(msgs, schema.OpenAIMessage{
-		Role:    schema.OpenAIMessageRoleAssistant,
-		Content: fmt.Sprintf("<thought>根据agent提出的问题，我采取“%s”的策略，希望得到一个粗略的回答，之后我将根据这个回答决定是否继续探索，直到能够完整清晰地帮忙补充（以原本回答者的角度）回答好最初的提问。</thought>\n<action>%s</action>", strategy, actionText),
+		Role:      schema.OpenAIMessageRoleAssistant,
+		Reasoning: fmt.Sprintf("根据agent提出的问题，我采取“%s”的策略，希望得到一个粗略的回答", strategy),
+		Content:   "之后我将根据这个回答决定是否继续探索，直到能够完整清晰地帮忙补充（以原本回答者的角度）回答好最初的提问。",
+		ToolCalls: []schema.OpenAIToolCall{
+			{
+				ID:   "1",
+				Type: "function",
+				Function: schema.OpenAIFunctionCall{
+					Name:      actionName,
+					Arguments: args,
+				},
+			},
+		},
+		FinishReason: "tool_calls",
 	})
 	msgs = append(msgs, schema.OpenAIMessage{
-		Role:    schema.OpenAIMessageRoleUser,
-		Content: fmt.Sprintf("<observation>%s</observation>", answer),
+		Role:       schema.OpenAIMessageRoleTool,
+		ToolCallID: "1",
+		Content:    answer,
 	})
 	result, err := a.RunWithMessages(context.Background(), msgs)
 	if err != nil {
