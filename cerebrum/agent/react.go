@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -132,6 +131,10 @@ func (a *ReActAgent) RunWithMessages(ctx context.Context, messages []schema.Open
 	}()
 
 	wc := workspace.NewWorkspaceContextForPurpose(a.purpose)
+	userInput := extractUserInput(messages)
+	if userInput != "" {
+		wc.WithUserInput(userInput)
+	}
 	thoughts := make([]string, 0, 8)
 	tools := mcp.ToOpenAITools()
 	consecutiveEmptyAssistant := 0
@@ -177,26 +180,24 @@ func (a *ReActAgent) RunWithMessages(ctx context.Context, messages []schema.Open
 		}
 
 		if len(msg.ToolCalls) == 0 {
-			if strings.EqualFold(strings.TrimSpace(msg.FinishReason), "tool_calls") {
+			finishReason := strings.ToLower(strings.TrimSpace(msg.FinishReason))
+			if finishReason == "tool_calls" {
 				return RunResult{}, fmt.Errorf("assistant finish_reason=tool_calls 但未返回 tool_calls：%s", strings.TrimSpace(msg.Content))
 			}
 
-			fallback := strings.TrimSpace(extractFallbackFinalAnswer(msg.Content))
-			if fallback != "" {
-				if len(extractEmbeddedActions(fallback)) > 0 {
-					return RunResult{}, fmt.Errorf("assistant 输出中包含 <action>：%s", strings.TrimSpace(fallback))
-				}
+			if finishReason == "stop" {
+				finalAnswer := strings.TrimSpace(msg.Content)
 				if len(hooks.FinalAnswerHandlers) > 0 {
 					msgSnapshot := append([]schema.OpenAIMessage(nil), messages...)
-					hooks.EmitFinalAnswer(sp, msgSnapshot, fallback)
+					hooks.EmitFinalAnswer(sp, msgSnapshot, finalAnswer)
 				} else if noHooks {
-					fmt.Println("✅Final Answer:", fallback)
+					logger.Logger.Println("✅Final Answer:", finalAnswer)
 				}
 				a.Mcp.CleanupRun(runID)
 				cleaned = true
 				return RunResult{
 					Thought:     strings.Join(thoughts, "\n"),
-					FinalAnswer: fallback,
+					FinalAnswer: finalAnswer,
 				}, nil
 			}
 
@@ -356,45 +357,6 @@ func (a *ReActAgent) Run(input string) {
 	})
 }
 
-// extractEmbeddedActions 从文本中提取所有嵌套的 <action>...</action> 标签内容
-func extractEmbeddedActions(content string) []string {
-	re := regexp.MustCompile(`(?s)<action>(.*?)</action>`)
-	matches := re.FindAllStringSubmatch(content, -1)
-	var actions []string
-	for _, m := range matches {
-		if len(m) > 1 {
-			actions = append(actions, strings.TrimSpace(m[1]))
-		}
-	}
-	return actions
-}
-
-func extractFallbackFinalAnswer(content string) string {
-	content = strings.TrimSpace(content)
-	if content == "" {
-		return ""
-	}
-	if extracted := helper.ExtractContentByTag(content, "final_answer"); strings.TrimSpace(extracted) != "" {
-		return strings.TrimSpace(extracted)
-	}
-	withoutThought := stripXmlTagBlock(content, "thought")
-	withoutThought = stripXmlTagBlock(withoutThought, "final_answer")
-	candidate := strings.TrimSpace(withoutThought)
-	if candidate == "" {
-		return ""
-	}
-	return candidate
-}
-
-func stripXmlTagBlock(raw string, tag string) string {
-	tag = strings.TrimSpace(tag)
-	if tag == "" || strings.TrimSpace(raw) == "" {
-		return raw
-	}
-	re := regexp.MustCompile(`(?s)<` + regexp.QuoteMeta(tag) + `>.*?</` + regexp.QuoteMeta(tag) + `>`)
-	return re.ReplaceAllString(raw, "")
-}
-
 type llmInputDump struct {
 	RunID        string                 `json:"run_id"`
 	Step         int                    `json:"step"`
@@ -433,4 +395,14 @@ func dumpLLMInput(runID string, step int, systemPrompt string, tools []schema.Op
 		return
 	}
 	_ = os.WriteFile(path, b, 0644)
+}
+
+func extractUserInput(messages []schema.OpenAIMessage) string {
+	for _, m := range messages {
+		if m.Role == schema.OpenAIMessageRoleUser {
+			content := strings.TrimSpace(m.Content)
+			return strings.TrimSpace(content)
+		}
+	}
+	return ""
 }

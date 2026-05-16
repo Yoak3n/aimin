@@ -6,12 +6,13 @@ import (
 	"time"
 
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
+	"github.com/Yoak3n/aimin/blood/pkg/util"
 	"github.com/Yoak3n/aimin/blood/schema"
 )
 
 const (
 	ChunkSize   = 80
-	OverlapSize = 10
+	OverlapSize = 20
 )
 
 func InsertConversation(cid, system, question, thoughts, answer string) {
@@ -25,15 +26,39 @@ func InsertConversation(cid, system, question, thoughts, answer string) {
 		CreateAt:  now,
 		UpdatedAt: now,
 	}
-	text := fmt.Sprintf("%s\n%s", question, answer)
-	// // 文本分割为多个段落
-	// chunks := splitWithOverlap(text, ChunkSize, OverlapSize)
 
-	embeding, err := helper.UseLLM().Embedding([]string{text})
+	text := fmt.Sprintf("%s\n%s\n%s", question, thoughts, answer)
+	chunks := splitWithOverlap(text, ChunkSize, OverlapSize)
+
+	if len(chunks) == 0 {
+		chunks = []string{text}
+	}
+
+	embeddings, err := helper.UseLLM().Embedding(chunks)
 	if err != nil {
 		log.Fatal(err)
 	}
-	helper.UseDB().CreateConversationRecord(c, embeding[0])
+
+	if err := helper.UseDB().CreateConversationRecord(c); err != nil {
+		log.Fatal(err)
+	}
+
+	textChunks := make([]schema.ConversationTextChunk, len(chunks))
+	for i, chunk := range chunks {
+		textChunks[i] = schema.ConversationTextChunk{
+			Id:             util.RandomIdWithPrefix("ctc"),
+			ConversationId: cid,
+			ChunkIndex:     i,
+			Content:        chunk,
+			Embedding:      embeddings[i],
+			CreatedAt:      now,
+			UpdatedAt:      now,
+		}
+	}
+
+	if err := helper.UseDB().CreateConversationTextChunks(textChunks); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func splitWithOverlap(s string, segSize, overlap int) []string {
@@ -57,10 +82,7 @@ func splitWithOverlap(s string, segSize, overlap int) []string {
 	step := segSize - overlap // 每次前进的步长
 
 	for start := 0; start < length; start += step {
-		end := start + segSize
-		if end > length {
-			end = length
-		}
+		end := min(start+segSize, length)
 		segments = append(segments, string(runes[start:end]))
 
 		// 如果最后一段不足 segSize 且已经到达末尾，退出

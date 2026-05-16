@@ -7,9 +7,10 @@ import (
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/pkg/util"
 	"github.com/Yoak3n/aimin/blood/schema"
+	"github.com/Yoak3n/aimin/kidney/filter"
+	"github.com/Yoak3n/aimin/kidney/retrieval"
 	"github.com/Yoak3n/aimin/nerve/controller"
 	"github.com/Yoak3n/aimin/nerve/memory"
-	"github.com/Yoak3n/aimin/kidney/retrieval"
 )
 
 type Nerve struct {
@@ -24,18 +25,36 @@ func ResponseHook(systemPrompt, answer string, messages []schema.OpenAIMessage) 
 }
 
 func QueryReleventConversations(input string) (string, error) {
-	conversations, err := retrieval.VectorSearchConversations(input, 5)
+	return QueryReleventConversationsWithFilter(input, DefaultConversationFilterChain())
+}
+
+func QueryReleventConversationsWithFilter(input string, chain *filter.Chain) (string, error) {
+	conversations, err := retrieval.VectorSearchConversations(input, 10)
 	if err != nil {
 		return "", err
 	}
-	if len(conversations) == 0 {
+
+	ctx := &filter.Context{
+		Query:   input,
+		Records: conversations,
+		Metadata: map[string]interface{}{
+			"source": "vector_search",
+		},
+	}
+
+	ctx, err = chain.Apply(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	if len(ctx.Records) == 0 {
 		return "no matches", nil
 	}
 
 	out := strings.Builder{}
 	out.WriteString("<vector_search_results>\n")
 	fmt.Fprintf(&out, "<query>%s</query>\n", compactOneLine(input, 240))
-	for _, c := range conversations {
+	for _, c := range ctx.Records {
 		sum := ""
 		if s, err := helper.UseDB().GetSummaryMemoryTableRecordByLink(c.Id); err == nil {
 			sum = strings.TrimSpace(s.Content)
@@ -48,11 +67,20 @@ func QueryReleventConversations(input string) (string, error) {
 			a := compactOneLine(c.Answer, 360)
 			fmt.Fprintf(&out, "<summary>%s</summary>\n", compactOneLine(q+" / "+a, 600))
 		}
-		fmt.Fprintf(&out, "<question>%s</question>\n", q)
+		fmt.Fprintf(&out, "%s", q)
 		out.WriteString("</conversation_summary>\n")
 	}
 	out.WriteString("</vector_search_results>")
 	return out.String(), nil
+}
+
+func DefaultConversationFilterChain() *filter.Chain {
+	return filter.NewChain(
+		filter.DeduplicateFilter(),
+		filter.EmptyFilter(),
+		filter.TrimSpaceFilter(),
+		filter.LimitFilter(5),
+	)
 }
 
 func GetConversationByID(id string) (string, error) {
@@ -62,6 +90,7 @@ func GetConversationByID(id string) (string, error) {
 	}
 
 	q := compactOneLine(rec.Question, 240)
+	t := compactOneLine(rec.Thoughts, 0)
 	a := compactOneLine(rec.Answer, 0)
 	sys := compactOneLine(rec.System, 200)
 
@@ -71,6 +100,9 @@ func GetConversationByID(id string) (string, error) {
 		fmt.Fprintf(&detail, "<system>%s</system>\n", sys)
 	}
 	fmt.Fprintf(&detail, "<question>%s</question>\n", q)
+	if t != "" {
+		fmt.Fprintf(&detail, "<thoughts>%s</thoughts>\n", t)
+	}
 	fmt.Fprintf(&detail, "<answer>%s</answer>\n", a)
 	fmt.Fprint(&detail, "</conversation>")
 	return detail.String(), nil

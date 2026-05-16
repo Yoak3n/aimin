@@ -15,10 +15,22 @@ type ConversationRecord struct {
 	CreateAt  time.Time      `json:"created_at" gorm:"column:created_at"`
 	UpdatedAt time.Time      `json:"updated_at" gorm:"column:updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index"`
-	// Embedding []float32      `gorm:"serializer:json"`
 }
 
 func (ConversationRecord) TableName() string { return "conversation" }
+
+type ConversationTextChunk struct {
+	Id             string         `json:"id" gorm:"primary key"`
+	ConversationId string         `json:"conversation_id" gorm:"column:conversation_id;index"`
+	ChunkIndex     int            `json:"chunk_index" gorm:"column:chunk_index"`
+	Content        string         `json:"content"`
+	Embedding      []float32      `json:"embedding" gorm:"type:vector"`
+	CreatedAt      time.Time      `json:"created_at" gorm:"column:created_at"`
+	UpdatedAt      time.Time      `json:"updated_at" gorm:"column:updated_at"`
+	DeletedAt      gorm.DeletedAt `gorm:"index"`
+}
+
+func (ConversationTextChunk) TableName() string { return "conversation_text_chunk" }
 
 type SummaryMemoryTable struct {
 	Id string `gorm:"primary key"`

@@ -8,15 +8,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yoak3n/aimin/bone/skill"
 	"github.com/Yoak3n/aimin/blood/config"
 	"github.com/Yoak3n/aimin/blood/pkg/helper"
 	"github.com/Yoak3n/aimin/blood/pkg/util"
+	"github.com/Yoak3n/aimin/bone/skill"
+	"github.com/Yoak3n/aimin/kidney/retrieval"
 )
 
 type WorkspaceContext struct {
 	prompt              string
 	previousTaskResults string
+	userInput           string
 }
 
 func NewWorkspaceContext() *WorkspaceContext {
@@ -51,11 +53,16 @@ func (wc *WorkspaceContext) WithPreviousTaskResults(results string) *WorkspaceCo
 	return wc
 }
 
+func (wc *WorkspaceContext) WithUserInput(input string) *WorkspaceContext {
+	wc.userInput = input
+	return wc
+}
+
 func (wc *WorkspaceContext) String(choose ...ContextChoice) string {
 	if len(choose) == 0 {
 		choose = append(choose, Normal)
 	}
-	wc.BuildPreviousTaskResults().BuildEnvInfo().BuildSkillInfo().BuildWorkspaceRoots().BuildWorkspaceContext(choose[0])
+	wc.BuildPreviousTaskResults().BuildEnvInfo().BuildSkillInfo().BuildWorkspaceRoots().BuildWorkspaceContext(choose[0]).BuildConversationContext()
 	return wc.prompt
 }
 
@@ -235,6 +242,44 @@ func (wc *WorkspaceContext) BuildWorkspaceContext(plan ...ContextChoice) *Worksp
 			return wc
 		}
 		wc.prompt = wc.prompt[:startIdx] + "\n" + workspaceContext + "\n" + wc.prompt[endIdx:]
+	}
+	return wc
+}
+
+func (wc *WorkspaceContext) BuildConversationContext() *WorkspaceContext {
+	conversationContext := ""
+	query := strings.TrimSpace(wc.userInput)
+	if query != "" {
+		records, err := retrieval.VectorSearchConversations(query, 5)
+		if err == nil && len(records) > 0 {
+			var sb strings.Builder
+			sb.WriteString("### 相关历史对话（向量检索）\n以下内容是根据当前用户输入，从历史对话中向量检索得到的相关记录（如有）：\n")
+			sb.WriteString("<conversation_records>\n")
+			for _, r := range records {
+				q := util.TruncateChars(r.Question, 200)
+				t := util.TruncateChars(r.Thoughts, 200)
+				a := util.TruncateChars(r.Answer, 300)
+				sum := ""
+				if s, err := helper.UseDB().GetSummaryMemoryTableRecordByLink(r.Id); err == nil {
+					sum = strings.TrimSpace(s.Content)
+				}
+				fmt.Fprintf(&sb, "<conversation id=%q time=%q>\n", r.Id, r.CreateAt.Format("2006-01-02 15:04"))
+				if sum != "" {
+					fmt.Fprintf(&sb, "<summary>%s</summary>\n", util.TruncateChars(sum, 400))
+				}
+				fmt.Fprintf(&sb, "<question>%s</question>\n", q)
+				fmt.Fprintf(&sb, "<thoughts>%s</thoughts>\n", t)
+				fmt.Fprintf(&sb, "<answer>%s</answer>\n", a)
+				sb.WriteString("</conversation>\n")
+			}
+			sb.WriteString("</conversation_records>")
+			conversationContext = sb.String()
+		}
+	}
+
+	if strings.Contains(wc.prompt, "{conversation_context}") {
+		out := strings.Replace(wc.prompt, "{conversation_context}", conversationContext, 1)
+		wc.prompt = out
 	}
 	return wc
 }

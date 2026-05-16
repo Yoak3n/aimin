@@ -10,7 +10,10 @@ func InitDatabase(db *gorm.DB, dim int) error {
 	if err := AddVectorExtension(db); err != nil {
 		return err
 	}
-	if err := ConversationTable(db, dim); err != nil {
+	if err := ConversationTable(db); err != nil {
+		return err
+	}
+	if err := ConversationTextChunkTable(db, dim); err != nil {
 		return err
 	}
 	if err := MetacognitionTable(db); err != nil {

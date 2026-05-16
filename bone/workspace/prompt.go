@@ -51,6 +51,8 @@ const ReActPromptTmpl = `# 角色定义和基本原则
 以下上下文文件可能已被注入（内容可能被截断）：
 {workspace_context}
 
+{conversation_context}
+
 ## 静默回复
 - 当你没有任何要说且无需执行工具时：输出 NO_REPLY（纯文本）
 
